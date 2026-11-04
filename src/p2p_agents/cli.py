@@ -221,7 +221,12 @@ def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(message)s")
     if args.command == "triage" and not (args.numbers or args.queue):
         parser.error("give incident numbers or --queue")
-    args.func(args)
+    try:
+        args.func(args)
+    except (RuntimeError, ValueError, LookupError, OSError) as e:
+        if args.verbose:
+            raise
+        sys.exit(f"error: {e}")
 
 
 if __name__ == "__main__":

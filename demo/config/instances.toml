@@ -1,0 +1,42 @@
+# Demo instances pointing at demo/mock_server.py (plus file bundles for Ariba and PDAP)
+
+[coupa-sbx]
+platform = "coupa"
+base_url = "http://127.0.0.1:8765/coupa-sbx"
+auth = "oauth2_client_credentials"
+token_url = "/oauth2/token"
+scopes = ["core.common.read", "core.common.write"]
+client_id_env = "DEMO_COUPA_CLIENT_ID"
+client_secret_env = "DEMO_COUPA_CLIENT_SECRET"
+
+[coupa-prod]
+platform = "coupa"
+base_url = "http://127.0.0.1:8765/coupa-prod"
+auth = "oauth2_client_credentials"
+token_url = "/oauth2/token"
+scopes = ["core.common.read", "core.common.write"]
+client_id_env = "DEMO_COUPA_CLIENT_ID"
+client_secret_env = "DEMO_COUPA_CLIENT_SECRET"
+is_production = true
+
+[pdap-dev]
+platform = "pdap"
+bundle_dir = "demo/data/pdap/dev100"
+outbox_dir = "demo/outbox/pdap"
+
+[pdap-prod]
+platform = "pdap"
+bundle_dir = "demo/data/pdap/prd300"
+outbox_dir = "demo/outbox/pdap"
+is_production = true
+
+[ariba-test]
+platform = "ariba"
+bundle_dir = "demo/data/ariba/test"
+outbox_dir = "demo/outbox/ariba"
+
+[ariba-prod]
+platform = "ariba"
+bundle_dir = "demo/data/ariba/prod"
+outbox_dir = "demo/outbox/ariba"
+is_production = true

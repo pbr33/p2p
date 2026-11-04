@@ -121,21 +121,26 @@ def dependency_issues(diffs: list[ItemDiff], source: Snapshot, target: Snapshot)
     moving = {(d.object_type, d.key) for d in diffs if d.status in ("added", "changed")}
     extracted = set(source.object_types) & set(target.object_types)
     issues: list[Issue] = []
+    unverified: dict[tuple[str, str], list[str]] = {}
     for object_type, key in sorted(moving):
         for dep in src_idx[(object_type, key)].depends_on:
             ref = (dep.object_type, dep.key)
             if ref in tgt_idx or ref in moving:
                 continue
             if dep.object_type not in extracted:
-                issues.append(Issue(
-                    severity="warning", code="MISSING_DEPENDENCY", object_type=object_type, key=key,
-                    message=f"references {dep.object_type} {dep.key!r} (at {dep.path}); not verified because "
-                            f"{dep.object_type} was not extracted from both instances",
-                ))
+                unverified.setdefault((object_type, dep.object_type), []).append(dep.key)
                 continue
             where = "exists in neither instance" if ref not in src_idx else f"is missing in {target.instance}"
             issues.append(Issue(
                 severity="error", code="MISSING_DEPENDENCY", object_type=object_type, key=key,
                 message=f"references {dep.object_type} {dep.key!r} (at {dep.path}), which {where}",
             ))
+    # One warning per referenced type that could not be checked, not one per reference
+    for (object_type, ref_type), keys in sorted(unverified.items()):
+        names = sorted(set(keys))
+        issues.append(Issue(
+            severity="warning", code="MISSING_DEPENDENCY", object_type=object_type, key="*",
+            message=f"references {len(names)} {ref_type} ({', '.join(names[:5])}{', ...' if len(names) > 5 else ''}) "
+                    f"not verified: {ref_type} is not extracted, so check they exist in {target.instance}",
+        ))
     return issues

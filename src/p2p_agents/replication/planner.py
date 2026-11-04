@@ -31,7 +31,10 @@ def build_plan(
     }
     moving_all = {(d.object_type, d.key) for d in report.diffs if d.status in ("added", "changed")}
 
-    issues = [i for i in report.issues if (i.object_type, i.key) in chosen or i.code == "DUPLICATE_KEY"]
+    chosen_types = {t for t, _ in chosen}
+    issues = [i for i in report.issues
+              if (i.object_type, i.key) in chosen or i.code == "DUPLICATE_KEY"
+              or (i.key == "*" and i.object_type in chosen_types)]
     graph: dict[tuple[str, str], set[tuple[str, str]]] = {ref: set() for ref in chosen}
     for ref in chosen:
         for dep in src_idx[ref].depends_on:

@@ -1,0 +1,6 @@
+2026-11-04 05:58:41 INFO  CIG doc=InvoiceDetailRequest id=AN0123998 supplier=ACME_GLOBAL status=Delivered target=SAP_ECC_PRD
+2026-11-04 06:01:12 ERROR CIG doc=InvoiceDetailRequest id=AN0124001 supplier=NORDIC_PAPER status=Failed target=SAP_ECC_PRD error="SSL handshake failed: client certificate expired (notAfter=2026-11-04T05:59:59Z) for endpoint https://pi.corp.example/XISOAPAdapter"
+2026-11-04 06:01:13 WARN  CIG retry scheduled id=AN0124001 attempt=1
+2026-11-04 06:04:40 ERROR CIG doc=InvoiceDetailRequest id=AN0124002 supplier=ACME_GLOBAL status=Failed target=SAP_ECC_PRD error="SSL handshake failed: client certificate expired (notAfter=2026-11-04T05:59:59Z) for endpoint https://pi.corp.example/XISOAPAdapter"
+2026-11-04 07:15:02 ERROR CIG queue depth=138 failed=138 oldest=2026-11-04T06:01:12Z target=SAP_ECC_PRD
+2026-11-04 07:15:02 INFO  CIG doc=OrderConfirmationRequest id=AN0124090 status=Delivered target=SAP_ECC_PRD channel=inbound-only

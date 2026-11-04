@@ -1,0 +1,29 @@
+{
+  "account_types": [
+    {"id": 501, "name": "US Operations", "currency": {"code": "USD"}, "active": true, "segment-count": 4}
+  ],
+  "tax_codes": [
+    {"id": 510, "code": "VAT20", "description": "UK standard VAT", "percentage": 20.0, "country": {"code": "GB"}, "active": true},
+    {"id": 512, "code": "US-EXEMPT", "description": "US exempt", "percentage": 0.0, "country": {"code": "US"}, "active": true},
+    {"id": 513, "code": "VAT175", "description": "Old UK VAT (retired)", "percentage": 17.5, "country": {"code": "GB"}, "active": false}
+  ],
+  "exchange_rates": [
+    {"id": 521, "from-currency": {"code": "USD"}, "to-currency": {"code": "GBP"}, "rate-date": "2026-11-01", "rate": 0.7731}
+  ],
+  "business_groups": [
+    {"id": 530, "name": "Global Buyers", "description": "All buyers worldwide"}
+  ],
+  "approval_chains": [
+    {"id": 540, "name": "Finance Approval", "approval-chain-steps": [
+      {"position": 1, "approver": {"login": "cfo"}}
+    ]}
+  ],
+  "approval_rules": [
+    {"id": 550, "name": "US invoices over 25k", "document-type": "invoice", "amount-threshold": 25000,
+     "currency": {"code": "USD"}, "account-type": {"name": "US Operations"}, "approval-chain": {"name": "Finance Approval"}}
+  ],
+  "custom_fields": [
+    {"id": 560, "object-type": "invoice", "name": "cost-centre-owner", "data-type": "string", "required": false},
+    {"id": 561, "object-type": "requisition", "name": "project-code", "data-type": "integer", "required": false}
+  ]
+}

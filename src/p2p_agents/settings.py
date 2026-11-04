@@ -16,6 +16,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 CONFIG_DIR = Path(os.environ.get("P2P_CONFIG_DIR", Path.cwd() / "config"))
+# Platform definitions shipped with the repo; used when a config dir doesn't override them
+BUILTIN_PLATFORMS = Path(__file__).resolve().parents[2] / "config" / "platforms"
 
 
 class ObjectTypeConfig(BaseModel):
@@ -84,6 +86,8 @@ class InstanceConfig(BaseModel):
 
 def load_platform(name: str, config_dir: Path = CONFIG_DIR) -> PlatformConfig:
     path = config_dir / "platforms" / f"{name}.toml"
+    if not path.exists():
+        path = BUILTIN_PLATFORMS / f"{name}.toml"
     if not path.exists():
         raise FileNotFoundError(f"no platform config at {path}")
     raw = tomllib.loads(path.read_text(encoding="utf-8"))

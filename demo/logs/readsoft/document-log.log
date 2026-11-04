@@ -1,0 +1,5 @@
+2026-11-03 14:02:11 INFO  doc=RSO-771201 buyer=SG01 supplier_identified=ACME Pte Ltd by=SupplierNumber value=V100234
+2026-11-04 09:11:45 WARN  doc=RSO-772950 buyer=SG01 supplier identification failed: no supplier master match for TaxRegistrationNumber value=M2-0123456-7 (candidates: none)
+2026-11-04 09:11:45 INFO  doc=RSO-772950 moved to exception queue reason=SUPPLIER_NOT_IDENTIFIED
+2026-11-04 09:30:02 WARN  doc=RSO-772977 buyer=SG01 supplier identification failed: no supplier master match for TaxRegistrationNumber value=M2-0123456-7 (candidates: none)
+2026-11-04 09:30:02 INFO  doc=RSO-772977 extracted SupplierName="ACME PTE. LTD." confidence=0.91 (name matching disabled in extraction profile SG-Invoices)

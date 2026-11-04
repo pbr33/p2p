@@ -1,0 +1,4 @@
+DocumentType,ParameterName,Value,LookupTable
+InvoiceDetailRequest,TaxCodeMapping,ENABLED,TAX_MAP
+InvoiceDetailRequest,UOMMapping,ENABLED,UOM_MAP
+OrderRequest,SendAttachments,true,

@@ -1,0 +1,30 @@
+{
+  "groups": ["P2P-Triage", "P2P-Coupa-L2", "P2P-Ariba-L2", "P2P-PDAP-L2", "P2P-Capture-L2",
+             "P2P-Tungsten-Network-L2", "P2P-Ariba-CIG-Integration", "P2P-Coupa-Integration", "IAM-Access-Requests"],
+  "incidents": [
+    {"sys_id": "a1", "number": "INC0012001", "state": "1", "priority": "2 - High", "impact": "2 - Medium", "urgency": "1 - High",
+     "short_description": "Ariba invoices not reaching SAP since this morning",
+     "description": "Since about 06:00 CET none of the supplier invoices submitted on Ariba Network have arrived in SAP ECC. Suppliers can see them as Sent. About 140 invoices affected, payment run is tomorrow.",
+     "category": "Software", "subcategory": "Integration", "cmdb_ci": "SAP Ariba", "assignment_group": "P2P-Triage",
+     "opened_at": "2026-11-04 08:12:00", "work_notes": "", "comments": ""},
+    {"sys_id": "a2", "number": "INC0012002", "state": "1", "priority": "3 - Moderate", "impact": "2 - Medium", "urgency": "2 - Medium",
+     "short_description": "APAC invoice of SGD 15,000 approved without finance approval in Coupa",
+     "description": "Invoice INV-SG-88213 for SGD 15,000 charged to APAC Operations was approved by the requester's manager only. Our policy says APAC invoices above SGD 10,000 must go to the APAC finance controller. This worked in the sandbox UAT last week.",
+     "category": "Software", "subcategory": "Workflow", "cmdb_ci": "Coupa", "assignment_group": "P2P-Triage",
+     "opened_at": "2026-11-04 09:40:00", "work_notes": "", "comments": ""},
+    {"sys_id": "a3", "number": "INC0012003", "state": "1", "priority": "3 - Moderate", "impact": "3 - Low", "urgency": "2 - Medium",
+     "short_description": "ReadSoft not recognising supplier ACME Pte Ltd on scanned invoices",
+     "description": "All scanned invoices from ACME Pte Ltd land in the exception queue with 'supplier not identified'. Started after ACME sent their new invoice template with their GST number at the top.",
+     "category": "Software", "subcategory": "Capture", "cmdb_ci": "ReadSoft Online", "assignment_group": "P2P-Triage",
+     "opened_at": "2026-11-04 10:05:00", "work_notes": "", "comments": ""},
+    {"sys_id": "h1", "number": "INC0009001", "state": "7", "short_description": "Ariba CIG invoice transfer to SAP failing",
+     "close_notes": "Client certificate on the CIG ERP connection had expired. Renewed the certificate in the CIG portal, uploaded to SAP PI keystore, reprocessed failed documents from the transaction tracker.",
+     "assignment_group": "P2P-Ariba-CIG-Integration", "resolved_at": "2025-11-03 14:20:00"},
+    {"sys_id": "h2", "number": "INC0009050", "state": "7", "short_description": "Coupa approval not triggered for APAC invoices",
+     "close_notes": "Approval rule existed only in sandbox. Replicated the rule and its approval chain to production after CAB approval.",
+     "assignment_group": "P2P-Coupa-L2", "resolved_at": "2026-03-18 11:02:00"},
+    {"sys_id": "h3", "number": "INC0009120", "state": "6", "short_description": "ReadSoft supplier not identified after VAT number change",
+     "close_notes": "Supplier master in ReadSoft still had the old VAT number. Updated supplier mapping and re-ran identification on queued documents.",
+     "assignment_group": "P2P-Capture-L2", "resolved_at": "2026-06-02 16:45:00"}
+  ]
+}

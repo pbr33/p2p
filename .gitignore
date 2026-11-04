@@ -8,3 +8,4 @@ snapshots/
 outbox/
 audit/
 docs/generated/
+demo/.env

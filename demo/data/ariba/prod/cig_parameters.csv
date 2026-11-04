@@ -1,0 +1,3 @@
+DocumentType,ParameterName,Value,LookupTable
+InvoiceDetailRequest,UOMMapping,ENABLED,UOM_MAP
+OrderRequest,SendAttachments,false,

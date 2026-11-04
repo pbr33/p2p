@@ -1,0 +1,5 @@
+Table,SourceValue,TargetValue
+UOM_MAP,EA,ST
+UOM_MAP,BX,KAR
+TAX_MAP,GST9,S9
+TAX_MAP,VAT20,V2
