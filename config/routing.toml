@@ -1,0 +1,19 @@
+# Precision dispatch: ServiceNow assignment group per platform, with per-category overrides.
+# Group names must match sys_user_group names exactly.
+triage_queue = "P2P-Triage"          # low confidence, unknown platform, or needs_human
+confidence_threshold = 0.6
+
+[platforms]
+coupa = "P2P-Coupa-L2"
+ariba = "P2P-Ariba-L2"
+pdap = "P2P-PDAP-L2"
+readsoft = "P2P-Capture-L2"
+tungsten_network = "P2P-Tungsten-Network-L2"
+
+[overrides.integration_failure]
+ariba = "P2P-Ariba-CIG-Integration"
+coupa = "P2P-Coupa-Integration"
+
+[overrides.access_security]
+coupa = "IAM-Access-Requests"
+ariba = "IAM-Access-Requests"

@@ -1,0 +1,30 @@
+# SAP Ariba. CIG (Managed Gateway) mappings, lookup tables and supplier workspace templates
+# have no general write API, so they are exchanged as files: export each object type from
+# the source realm into <bundle_dir> (CIG portal export, Ariba Administrator data export),
+# run the diff, then upload the generated <outbox_dir>/*.import.csv to the target realm.
+display_name = "SAP Ariba"
+connector = "file_bundle"
+default_volatile = ["LastModified", "LastModifiedBy", "TimeCreated", "CreatedBy"]
+
+[objects.cig_parameters]
+description = "CIG mapping parameters (per document type and trading relationship)"
+file = "cig_parameters.csv"
+key = "DocumentType+ParameterName"
+references = { "LookupTable" = "lookup_tables" }
+
+[objects.cig_cross_references]
+description = "CIG cross-reference / value-mapping entries"
+file = "cig_cross_references.csv"
+key = "Table+SourceValue"
+references = { "Table" = "lookup_tables" }
+
+[objects.lookup_tables]
+description = "Lookup tables used by CIG mappings and Ariba guided buying"
+file = "lookup_tables.csv"
+key = "Name"
+
+[objects.supplier_workspace_templates]
+description = "Supplier management (SLP) workspace templates"
+file = "supplier_workspace_templates.json"
+key = "templateName"
+immutable = ["templateType"]

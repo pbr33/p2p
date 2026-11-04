@@ -1,0 +1,67 @@
+# Coupa Core REST API (JSON). Paths are relative to https://<instance>.coupahost.com.
+# Endpoint names and payload keys vary by Coupa release and by the API scopes granted to
+# your OAuth client: confirm each path and key against your instance's API documentation
+# (Setup > Integrations > OAuth2/OpenID Connect Clients) before the first --apply.
+display_name = "Coupa"
+connector = "rest"
+pagination = "offset"
+page_size = 50
+offset_param = "offset"
+limit_param = "limit"
+default_volatile = ["id", "created-at", "updated-at", "created-by", "updated-by",
+                    "created_at", "updated_at", "created_by", "updated_by"]
+
+[objects.account_types]
+description = "Chart of accounts (parent of accounts, approval rules and tax codes)"
+list_path = "/api/account_types"
+create_path = "/api/account_types"
+update_path = "/api/account_types/{id}"
+key = "name"
+immutable = ["currency"]
+
+[objects.tax_codes]
+description = "Tax codes"
+list_path = "/api/tax_codes"
+create_path = "/api/tax_codes"
+update_path = "/api/tax_codes/{id}"
+key = "code"
+references = { "country.code" = "countries" }
+
+[objects.exchange_rates]
+description = "Exchange rate table"
+list_path = "/api/exchange_rates"
+create_path = "/api/exchange_rates"
+update_path = "/api/exchange_rates/{id}"
+key = "from-currency.code+to-currency.code+rate-date"
+
+[objects.content_groups]
+description = "Content groups (business groups) controlling catalogue and supplier visibility"
+list_path = "/api/business_groups"
+create_path = "/api/business_groups"
+update_path = "/api/business_groups/{id}"
+key = "name"
+
+[objects.approval_chains]
+description = "Approval chains and their approver steps"
+list_path = "/api/approval_chains"
+create_path = "/api/approval_chains"
+update_path = "/api/approval_chains/{id}"
+key = "name"
+references = { "approval-chain-steps[].approver.login" = "users", "account-type.name" = "account_types" }
+
+[objects.approval_rules]
+description = "Dynamic approval rules (conditions and the chains they route to)"
+list_path = "/api/approval_rules"
+create_path = "/api/approval_rules"
+update_path = "/api/approval_rules/{id}"
+key = "name"
+references = { "approval-chain.name" = "approval_chains", "account-type.name" = "account_types" }
+
+[objects.custom_fields]
+description = "Custom fields on requisitions, invoices and suppliers"
+list_path = "/api/custom_fields"
+create_path = "/api/custom_fields"
+update_path = "/api/custom_fields/{id}"
+key = "object-type+name"
+# Changing the data type of a custom field that already holds data is not allowed
+immutable = ["data-type", "object-type", "name"]

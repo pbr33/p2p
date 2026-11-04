@@ -1,0 +1,65 @@
+# Copy to config/instances.toml and adjust. Credentials are read from the environment
+# variables named here; never put secrets in this file.
+
+[coupa-sbx]
+platform = "coupa"
+base_url = "https://yourcompany-test.coupahost.com"
+auth = "oauth2_client_credentials"
+token_url = "/oauth2/token"
+scopes = ["core.common.read", "core.common.write", "core.approval.read", "core.approval.write"]
+client_id_env = "COUPA_SBX_CLIENT_ID"
+client_secret_env = "COUPA_SBX_CLIENT_SECRET"
+
+[coupa-prod]
+platform = "coupa"
+base_url = "https://yourcompany.coupahost.com"
+auth = "oauth2_client_credentials"
+token_url = "/oauth2/token"
+scopes = ["core.common.read", "core.common.write", "core.approval.read", "core.approval.write"]
+client_id_env = "COUPA_PROD_CLIENT_ID"
+client_secret_env = "COUPA_PROD_CLIENT_SECRET"
+is_production = true
+
+[ariba-test]
+platform = "ariba"
+bundle_dir = "exports/ariba/test"
+outbox_dir = "outbox/ariba/test"
+
+[ariba-prod]
+platform = "ariba"
+bundle_dir = "exports/ariba/prod"
+outbox_dir = "outbox/ariba/prod"
+is_production = true
+
+[rso-test]
+platform = "readsoft"
+base_url = "https://services.readsoftonline.com"
+auth = "api_key"
+api_key_header = "x-rs-key"
+api_key_env = "RSO_TEST_API_KEY"
+path_vars = { org = "your-test-organization-id" }
+
+[rso-prod]
+platform = "readsoft"
+base_url = "https://services.readsoftonline.com"
+auth = "api_key"
+api_key_header = "x-rs-key"
+api_key_env = "RSO_PROD_API_KEY"
+path_vars = { org = "your-production-organization-id" }
+is_production = true
+
+[pdap-dev]
+platform = "pdap"
+bundle_dir = "exports/pdap/dev100"
+outbox_dir = "outbox/pdap/dev100"
+
+[pdap-qa]
+platform = "pdap"
+bundle_dir = "exports/pdap/qa200"
+outbox_dir = "outbox/pdap/qa200"
+
+[pdap-prod]
+platform = "pdap"
+bundle_dir = "exports/pdap/prd300"
+outbox_dir = "outbox/pdap/prd300"
+is_production = true

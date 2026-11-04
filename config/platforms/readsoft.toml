@@ -1,0 +1,45 @@
+# ReadSoft Online / Tungsten AP Essentials REST API (JSON).
+# {org} comes from the instance's path_vars. Confirm paths, auth header and payload keys
+# against your tenant's API documentation; they differ between ReadSoft Online and later
+# Tungsten AP Essentials releases.
+display_name = "ReadSoft Online / Tungsten AP Essentials"
+connector = "rest"
+pagination = "page"
+page_size = 100
+page_param = "pageIndex"
+limit_param = "pageSize"
+default_volatile = ["Id", "CreatedDate", "ModifiedDate", "ModifiedBy"]
+
+[objects.document_types]
+description = "Document types (invoice, credit note, order confirmation ...)"
+list_path = "/documenttypes/rest/{org}"
+create_path = "/documenttypes/rest/{org}"
+update_path = "/documenttypes/rest/{org}/{id}"
+key = "Name"
+id_field = "Id"
+
+[objects.extraction_profiles]
+description = "Extraction profiles: fields captured per document type"
+list_path = "/extractionprofiles/rest/{org}"
+create_path = "/extractionprofiles/rest/{org}"
+update_path = "/extractionprofiles/rest/{org}/{id}"
+key = "Name"
+id_field = "Id"
+references = { "DocumentType" = "document_types" }
+
+[objects.validation_rules]
+description = "Validation rule sets applied after extraction"
+list_path = "/validationrules/rest/{org}"
+create_path = "/validationrules/rest/{org}"
+update_path = "/validationrules/rest/{org}/{id}"
+key = "Name"
+id_field = "Id"
+references = { "ExtractionProfile" = "extraction_profiles" }
+
+[objects.supplier_mappings]
+description = "Supplier master mappings used for supplier identification"
+list_path = "/masterdata/rest/{org}/suppliers"
+create_path = "/masterdata/rest/{org}/suppliers"
+update_path = "/masterdata/rest/{org}/suppliers/{id}"
+key = "SupplierNumber"
+id_field = "Id"

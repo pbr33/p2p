@@ -1,0 +1,31 @@
+# Process Director Accounts Payable (PDAP) customizing in SAP (/EBY/ namespace).
+# Changes to QA and production clients must travel in transport requests, so PDAP runs as a
+# file bundle: export the customizing views from the source client (SM30/SE16 download or a
+# custom report) into <bundle_dir>, diff against the target client's export, and use the
+# generated <outbox_dir>/*.import.csv as the content list for the transport request.
+display_name = "Process Director Accounts Payable"
+connector = "file_bundle"
+default_volatile = ["MANDT", "AEDAT", "AENAM", "ERDAT", "ERNAM"]
+
+[objects.workflow_steps]
+description = "Workflow step configuration"
+file = "workflow_steps.csv"
+key = "WORKFLOW+STEP"
+references = { "CHECK_PROFILE" = "check_profiles" }
+
+[objects.check_profiles]
+description = "Validation check profiles"
+file = "check_profiles.csv"
+key = "PROFILE"
+
+[objects.check_profile_checks]
+description = "Checks assigned to each check profile"
+file = "check_profile_checks.csv"
+key = "PROFILE+CHECK_ID"
+references = { "PROFILE" = "check_profiles" }
+
+[objects.determination_tables]
+description = "Determination tables (e.g. workflow, document type and company code determination)"
+file = "determination_tables.csv"
+key = "TABLE+SEQUENCE"
+references = { "WORKFLOW" = "workflow_steps" }
