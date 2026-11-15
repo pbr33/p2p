@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -66,6 +67,18 @@ class LLM:
         self.effort = effort
 
     def _send(self, max_tokens: int, **params: Any) -> Any:
+        # Connection drops (proxies, VPN, cloud gateways) can also happen mid-stream, where the SDK's
+        # own retries do not apply: retry the whole request a few times before giving up.
+        for attempt in range(4):
+            try:
+                return self._send_once(max_tokens, **params)
+            except anthropic.APIConnectionError:
+                if attempt == 3:
+                    raise
+                time.sleep(2 * (attempt + 1))
+        raise AssertionError("unreachable")
+
+    def _send_once(self, max_tokens: int, **params: Any) -> Any:
         if self.first_party:
             stream_ctx = self.client.beta.messages.stream(
                 model=self.model, max_tokens=max_tokens, output_config={"effort": self.effort},

@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import csv
 import io
+import json
 from pathlib import Path
 from typing import Any
 
@@ -170,6 +171,8 @@ def _check(template: Template, raw: dict[str, Any], source: str) -> dict[str, An
 def save(extraction: Extraction, template: Template, answers: Path) -> Extraction:
     answers.parent.mkdir(parents=True, exist_ok=True)
     write_answers(extraction.entities, template, answers)
+    answers.with_suffix(".meta.json").write_text(
+        json.dumps({"template": template.name, "answers": str(answers.resolve())}), encoding="utf-8")
     gaps_path = answers.with_suffix(".gaps.md")
     md = [f"# Open points — {answers.name}", "",
           f"{len(extraction.entities)} entities read · {sum(s['ok'] for s in extraction.status)} complete · "

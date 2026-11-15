@@ -118,13 +118,45 @@ Override the assumed minutes and hourly rate in `config/roi.toml` (keys: `hourly
 `currency`, `minutes_per_object`, `minutes_per_test`, `minutes_per_uat_case`,
 `minutes_per_answer`, `minutes_per_fix`).
 
+### Consistency across company codes
+
+`p2p consistency` (and the cockpit's heatmap) compares every company code — rolled out and
+drafts read from client documents — and flags the same tax code with different rates, numbers
+far from their peers in the same currency (a limit 7.5× the median: a lakh/crore slip?), tax
+codes most company codes of a country have but one lacks, approvers who otherwise only approve
+for another country, and the same company code with different answers in two files. No AI;
+exits 1 on conflicts so it can gate a pipeline.
+
+### Drift watch
+
+`p2p watch [--every 30]` or `p2p cockpit --watch-every 30` re-tests every environment that
+passed and raises an alert when one no longer does — someone changed configuration by hand.
+Alerts appear in the cockpit header and `rollout/watch.json`; set `P2P_TEAMS_WEBHOOK` to an
+incoming-webhook URL to post them to a Teams channel. Then use 🩹 Diagnose & fix.
+
+### Steering committee pack
+
+The cockpit's **📊 Steering pack** (`/report`, or `/report?ai=0` without AI) is one printable
+page — Print → Save as PDF: readiness, roll-outs, blockers, consistency findings, drift and time
+saved, plus a Claude-written executive summary, decisions needed (with owners) and top risks,
+drawn only from the data printed below it.
+
+### Voice
+
+The 🎤 button in the Copilot panel takes questions in English or Hindi (Edge or Chrome speech
+recognition) and reads the answers aloud.
+
 ### Demo
 
 ```powershell
 .\.venv\Scripts\python demo\mock_server.py      # separate window
 .\demo\stage-wow-demo.ps1                       # wave 1 live, a manual change in QA, a failed UAT case
-.\demo\p2p.ps1 cockpit --open                   # then: 🩹 Diagnose & fix, and drop demo\documents\acme-wave2-company-codes.xlsx
+.\demo\p2p.ps1 cockpit --open
 ```
+
+Then: **Check drift** (QA drifted) → **🩹 Diagnose & fix** → Approve → drop
+`demo\documents\acme-wave2-company-codes.xlsx` (the consistency check flags IN40's limit) →
+**Plan the roll-out** → **📊 Steering pack** → ask by voice: "How ready are we for go-live?"
 
 Claude on Microsoft Foundry: set `ANTHROPIC_FOUNDRY_BASE_URL` (…/anthropic), `ANTHROPIC_FOUNDRY_API_KEY`
 and `P2P_MODEL` to the deployment name (e.g. `claude-opus-4-8`) in `demo\.env` or the environment.

@@ -1,8 +1,9 @@
 """Writes demo/documents/acme-wave2-company-codes.xlsx: the kind of workbook a client sends.
 
 Deliberately imperfect, like the real thing: a title row above the header, country and
-currency names instead of codes, Indian number formats ("1,50,000", "2 lakh"), one
-finance approver still "TBC", and a tax matrix on a separate sheet.
+currency names instead of codes, Indian number formats ("15,00,000", "2 lakh"), one
+finance approver still "TBC", a tax matrix on a separate sheet — and IN40's limit is ten
+times its peers (a likely lakh/crore slip the consistency check should catch).
 
     python demo/make_client_workbook.py
 """
@@ -28,7 +29,7 @@ def main() -> None:
                "Finance controller (Coupa login)", "Finance approval above", "Comments"])
     for c in ws[3]:
         c.font, c.fill = BOLD, HEAD
-    ws.append(["IN40", "Acme Chennai Pvt Ltd", "India", "Indian Rupee", "ap.india", "cfo.india", "1,50,000", ""])
+    ws.append(["IN40", "Acme Chennai Pvt Ltd", "India", "Indian Rupee", "ap.india", "cfo.india", "15,00,000", ""])
     ws.append(["IN50", "Acme Hyderabad Pvt Ltd", "India", "INR", "ap.india", "TBC", "2 lakh",
                "Finance controller to be confirmed by Group Finance"])
     ws.append(["SG20", "Acme Asia Holdings Pte Ltd", "Singapore", "SGD", "ap.sg", "apac.controller", "50000", ""])

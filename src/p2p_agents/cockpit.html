@@ -25,7 +25,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body { background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 14px 20px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; }
 header h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: -.01em; }
 header .sub { color: var(--muted); font-size: 13px; }
 header .spacer { flex: 1; }
@@ -139,6 +139,26 @@ th { color: var(--muted); font-weight: 600; background: var(--surface-2); positi
 .retest { color: var(--wait); font-size: 12.5px; margin-top: 6px; }
 .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
 @keyframes sp { to { transform: rotate(360deg); } }
+.watch { font-size: 12.5px; padding: 4px 10px; border-radius: 99px; background: var(--pass-soft); color: var(--pass); white-space: nowrap; }
+.watch.alert { background: var(--fail-soft); color: var(--fail); font-weight: 600; }
+.watch.idle { background: var(--idle-soft); color: var(--idle); }
+.cons { padding: 18px; margin-bottom: 16px; }
+.cons h2 { font-size: 15px; margin: 0 0 6px; }
+.finding { display: grid; grid-template-columns: 74px 56px 1fr; gap: 8px; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.finding:last-child { border-bottom: 0; }
+.sev { font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 6px; text-align: center; height: fit-content; }
+.sev.error { background: var(--fail-soft); color: var(--fail); } .sev.warning { background: var(--wait-soft); color: var(--wait); } .sev.info { background: var(--idle-soft); color: var(--idle); }
+.heat td.f-error { background: var(--fail-soft); color: var(--fail); font-weight: 600; }
+.heat td.f-warning { background: var(--wait-soft); color: var(--wait); font-weight: 600; }
+.heat td.f-info { background: var(--accent-soft); }
+.heat th.q { white-space: nowrap; }
+.heat td { white-space: nowrap; }
+.mic { width: 44px; padding: 0; font-size: 18px; flex: none; }
+.mic.on { background: var(--fail); border-color: var(--fail); color: #fff; animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--fail) 25%, transparent); } }
+.voicebar { display: flex; gap: 8px; align-items: center; padding: 0 10px 8px; font-size: 12px; color: var(--muted); }
+.voicebar select { font: inherit; font-size: 12px; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.voicebar label { display: flex; gap: 4px; align-items: center; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -148,6 +168,9 @@ th { color: var(--muted); font-weight: 600; background: var(--surface-2); positi
     <div class="sub">Company-code roll-outs · DEV → QA → UAT → go-live</div>
   </div>
   <div class="spacer"></div>
+  <span class="watch idle" id="watch" title="Drift watch: re-tests passed environments for manual changes">🛡 Drift watch</span>
+  <button class="btn" id="watchnow" title="Re-test every passed environment now">Check drift</button>
+  <a class="btn" href="/report" target="_blank" rel="noopener" style="text-decoration:none">📊 Steering pack</a>
   <span class="updated" id="updated"></span>
   <button class="btn" id="refresh">Refresh</button>
 </header>
@@ -165,6 +188,7 @@ th { color: var(--muted); font-weight: 600; background: var(--surface-2); positi
       </div>
       <div class="docres" id="docres"></div>
     </section>
+    <section class="card cons" id="cons" aria-label="Consistency across company codes" hidden></section>
     <div id="runs"><div class="card empty">Loading…</div></div>
   </main>
 
@@ -181,9 +205,14 @@ th { color: var(--muted); font-weight: 600; background: var(--surface-2); positi
       <button>QA kyun fail hua? Hindi mein samjhao</button>
     </div>
     <form class="composer" id="composer">
+      <button class="btn mic" id="mic" type="button" title="Speak your question" aria-label="Speak">🎤</button>
       <textarea id="input" placeholder="Ask the Copilot… (Enter to send)" aria-label="Message"></textarea>
       <button class="btn primary" id="send" type="submit">Send</button>
     </form>
+    <div class="voicebar" id="voicebar">
+      <select id="lang" aria-label="Voice language"><option value="en-IN">English</option><option value="hi-IN">हिन्दी</option></select>
+      <label><input type="checkbox" id="speak"> 🔊 Read answers aloud</label>
+    </div>
   </aside>
 </div>
 <div class="toast" id="toast"></div>
@@ -357,8 +386,90 @@ document.addEventListener("click", e => {
   if (b) send(b.dataset.ask);
 });
 
+// ───── drift watch ─────
+function showWatch(w) {
+  const el = $("#watch");
+  if (!w.last_check) { el.className = "watch idle"; el.textContent = "🛡 Drift watch: not run yet"; return; }
+  const when = new Date(w.last_check).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+  const fresh = (w.new_alerts || []).length;
+  el.className = "watch" + (fresh ? " alert" : "");
+  el.textContent = fresh ? `⚠️ Drift in ${w.new_alerts.map(a => a.environment).join(", ")} (checked ${when})`
+                         : `🛡 No drift · checked ${when}${w.every_minutes ? ` · every ${w.every_minutes} min` : ""}`;
+  el.title = fresh ? w.new_alerts.flatMap(a => a.failed.slice(0, 3)).join("\n") : `Checked: ${(w.checked || []).join(", ")}`;
+}
+async function loadWatch() { try { showWatch(await api("/api/watch")); } catch {} }
+$("#watchnow").addEventListener("click", async e => {
+  const b = e.currentTarget; b.disabled = true; b.innerHTML = '<span class="spin"></span>Checking…';
+  try {
+    const w = await api("/api/watch", {});
+    showWatch(w);
+    toast(w.new_alerts.length ? `Drift found in ${w.new_alerts.map(a => a.environment).join(", ")}` : `No drift in ${w.checked.length} environment(s)`);
+    if (w.new_alerts.length) refresh();
+  } catch (err) { toast(err.message); }
+  b.disabled = false; b.textContent = "Check drift";
+});
+
+// ───── consistency ─────
+async function loadConsistency() {
+  try {
+    const c = await api("/api/consistency"), el = $("#cons");
+    if (!c.company_codes) { el.hidden = true; return; }
+    el.hidden = false;
+    const m = c.matrix, open = el.querySelector("details")?.open;
+    const items = c.findings.map(f => `<div class="finding"><span class="sev ${f.severity}">${esc(f.severity)}</span><b>${esc(f.entity)}</b><span>${esc(f.message)}</span></div>`).join("");
+    const head = m.entities.map(e => `<th title="${esc(e.template)} · ${esc(e.origin)}">${esc(e.code)}${e.origin.startsWith("draft") ? " ✎" : ""}</th>`).join("");
+    const body = m.questions.map((q, i) => `<tr><th class="q">${esc(q)}</th>${m.cells[i].map((v, j) => `<td class="${m.flags[i][j] ? "f-" + m.flags[i][j] : ""}">${esc(v) || "—"}</td>`).join("")}</tr>`).join("");
+    el.innerHTML = `<h2>🔎 Consistency across ${c.company_codes} company codes</h2>
+      ${items || '<div class="ok">No conflicts or outliers.</div>'}
+      ${items ? `<button class="btn small" style="margin-top:8px" data-ask="Run the consistency check and explain each finding: is it likely a mistake, what should the value probably be, and who should confirm it?">Explain these findings</button>` : ""}
+      <details ${open ? "open" : ""}><summary>Heatmap: every answer side by side (✎ = draft from a client document)</summary>
+      <div class="tablewrap heat"><table><tr><th></th>${head}</tr>${body}</table></div></details>`;
+  } catch {}
+}
+
+// ───── voice ─────
+const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, listening = false;
+function pref(key, value) { try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); } catch {} }
+if (pref("cockpit.lang")) $("#lang").value = pref("cockpit.lang");
+$("#speak").checked = pref("cockpit.speak") === "1";
+$("#lang").addEventListener("change", () => pref("cockpit.lang", $("#lang").value));
+$("#speak").addEventListener("change", () => { pref("cockpit.speak", $("#speak").checked ? "1" : "0"); if (!$("#speak").checked) speechSynthesis.cancel(); });
+if (!Recognition) { $("#mic").disabled = true; $("#mic").title = "Voice input needs Edge or Chrome"; }
+$("#mic").addEventListener("click", () => {
+  if (!Recognition) return;
+  if (listening) { rec.stop(); return; }
+  rec = new Recognition();
+  rec.lang = $("#lang").value; rec.interimResults = true; rec.continuous = false;
+  let finalText = "";
+  rec.onresult = e => {
+    let interim = "";
+    for (const r of e.results) { if (r.isFinal) finalText = r[0].transcript; else interim += r[0].transcript; }
+    $("#input").value = finalText || interim;
+  };
+  rec.onerror = e => toast(e.error === "not-allowed" ? "Allow the microphone to talk to the Copilot" : `Voice: ${e.error}`);
+  rec.onend = () => {
+    listening = false; $("#mic").classList.remove("on");
+    if (finalText.trim()) { $("#speak").checked = true; pref("cockpit.speak", "1"); send(finalText, true); }
+  };
+  speechSynthesis.cancel();
+  rec.start(); listening = true; $("#mic").classList.add("on");
+});
+function speak(markdown) {
+  if (!$("#speak").checked || !window.speechSynthesis) return;
+  const text = markdown.replace(/\|[^\n]*\|/g, " ").replace(/[#*`_>]/g, "").replace(/\n+/g, ". ").replace(/\s+/g, " ").slice(0, 900);
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = $("#lang").value;
+  const voice = speechSynthesis.getVoices().find(v => v.lang.replace("_", "-").startsWith(u.lang)) ||
+                speechSynthesis.getVoices().find(v => v.lang.startsWith(u.lang.slice(0, 2)));
+  if (voice) u.voice = voice;
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+
 async function refresh() {
   loadRoi();
+  loadWatch();
+  loadConsistency();
   try {
     const runs = await api("/api/runs");
     $("#runs").innerHTML = runs.length ? runs.map(runCard).join("")
@@ -465,18 +576,19 @@ $("#msgs").addEventListener("click", async e => {
   } catch (err) { box.innerHTML = `<b>Could not run</b>${esc(err.message)}`; }
 });
 
-async function send(text) {
+async function send(text, voice = false) {
   text = text.trim();
   if (!text) return;
-  addMsg("user", esc(text));
+  addMsg("user", (voice ? "🎤 " : "") + esc(text));
   $("#input").value = ""; $("#send").disabled = true; $("#suggest").style.display = "none";
   const typing = document.createElement("div"); typing.className = "typing"; typing.textContent = "Copilot is working…";
   $("#msgs").appendChild(typing);
   try {
-    const r = await api("/api/ask", {message: text});
+    const lang = $("#lang").value === "hi-IN" ? " Reply in Hindi (Devanagari)." : "";
+    const r = await api("/api/ask", {message: voice ? `(voice${lang ? ", Hindi" : ""}) ${text}` : text});
     typing.remove();
     if (r.error) addMsg("err", esc(r.error));
-    else addMsg("bot", md(r.reply || "(no answer)"));
+    else { addMsg("bot", md(r.reply || "(no answer)")); if (voice || $("#speak").checked) speak(r.reply || ""); }
     showApprovals(r.approvals);
     refresh();
   } catch (e) { typing.remove(); addMsg("err", esc(e.message)); }

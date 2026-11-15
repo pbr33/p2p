@@ -14,7 +14,9 @@ Standard library only; binds to 127.0.0.1 by default (no authentication — do n
 from __future__ import annotations
 
 import base64
+import html
 import json
+import logging
 import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -23,21 +25,48 @@ from typing import Any
 from urllib.parse import unquote
 
 from p2p_agents.agents.copilot import CopilotAgent, NoArgs, VerifyArgs
+from p2p_agents.llm import LLM
+from p2p_agents.report import ai_summary, gather, render
+from p2p_agents.rollout.consistency import consistency
 from p2p_agents.rollout.documents import SUPPORTED
 from p2p_agents.rollout.reports import set_manual_done
 from p2p_agents.settings import CONFIG_DIR, load_instances
+from p2p_agents.watch import check_drift, read_watch
 from p2p_agents.workspace import RUNS_DIR, all_runs, load_run, roi, run_summary
 
 PAGE = Path(__file__).with_name("cockpit.html")
 
 
 class Cockpit:
-    def __init__(self, config_dir: Path = CONFIG_DIR, runs_root: Path = RUNS_DIR, copilot: CopilotAgent | None = None):
+    def __init__(self, config_dir: Path = CONFIG_DIR, runs_root: Path = RUNS_DIR, copilot: CopilotAgent | None = None,
+                 watch_every: int = 0):
         self.config_dir = config_dir
         self.runs_root = runs_root
         # Changes requested in the chat wait for the Approve button
         self.copilot = copilot or CopilotAgent(approve=lambda summary: None, config_dir=config_dir, runs_root=runs_root)
         self.lock = threading.Lock()  # one copilot conversation, one change at a time
+        self.watch_every = watch_every
+        if watch_every:
+            threading.Thread(target=self._watch_loop, daemon=True).start()
+
+    def _watch_loop(self) -> None:
+        stop = threading.Event()
+        while not stop.wait(self.watch_every * 60):
+            try:
+                with self.lock:
+                    check_drift(self.runs_root, self.config_dir)
+            except Exception:  # noqa: BLE001 - keep watching
+                logging.getLogger(__name__).exception("drift check failed")
+
+    def report(self, with_ai: bool) -> str:
+        data = gather(self.runs_root, self.config_dir)
+        summary = error = None
+        if with_ai:
+            try:
+                summary = ai_summary(data, self.copilot.llm or LLM(effort="medium"))
+            except Exception as e:  # noqa: BLE001 - the pack is still useful without it
+                error = _friendly(e)
+        return render(data, summary, error)
 
     # ───── API ─────
 
@@ -69,6 +98,13 @@ class Cockpit:
                 except Exception as e:  # noqa: BLE001 - shown in the chat
                     return 200, {"error": _friendly(e), "approvals": self._approvals()}
             return 200, {"reply": reply, "approvals": self._approvals()}
+        if method == "GET" and path == "/api/consistency":
+            return 200, consistency(self.runs_root, self.config_dir)
+        if method == "GET" and path == "/api/watch":
+            return 200, {**read_watch(self.runs_root), "every_minutes": self.watch_every}
+        if method == "POST" and path == "/api/watch":
+            with self.lock:
+                return 200, check_drift(self.runs_root, self.config_dir)
         if method == "GET" and path == "/api/roi":
             return 200, roi(self.runs_root, self.config_dir)
         if method == "GET" and path == "/api/templates":
@@ -160,6 +196,13 @@ def make_handler(cockpit: Cockpit) -> type[BaseHTTPRequestHandler]:
             path = self.path.split("?")[0]
             if method == "GET" and path in ("/", "/index.html"):
                 return self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+            if method == "GET" and path == "/report":
+                try:
+                    page = cockpit.report(with_ai="ai=0" not in self.path)
+                except Exception as e:  # noqa: BLE001
+                    return self._send(500, f"<p>Could not build the pack: {html.escape(str(e))}</p>".encode(),
+                                      "text/html; charset=utf-8")
+                return self._send(200, page.encode(), "text/html; charset=utf-8")
             body: dict[str, Any] = {}
             if method == "POST":
                 if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
@@ -186,9 +229,10 @@ def make_handler(cockpit: Cockpit) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
-def serve(host: str = "127.0.0.1", port: int = 8770, cockpit: Cockpit | None = None) -> None:
-    server = ThreadingHTTPServer((host, port), make_handler(cockpit or Cockpit()))
-    print(f"Go-Live Cockpit on http://{host}:{port}  (Ctrl+C to stop)")
+def serve(host: str = "127.0.0.1", port: int = 8770, cockpit: Cockpit | None = None, watch_every: int = 0) -> None:
+    server = ThreadingHTTPServer((host, port), make_handler(cockpit or Cockpit(watch_every=watch_every)))
+    print(f"Go-Live Cockpit on http://{host}:{port}  (Ctrl+C to stop)"
+          + (f"; drift watch every {watch_every} min" if watch_every else ""))
     try:
         server.serve_forever()
     except KeyboardInterrupt:

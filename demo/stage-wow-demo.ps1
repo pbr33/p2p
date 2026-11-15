@@ -1,7 +1,9 @@
 # Sets up the "wow" demo state in about 30 seconds (mock server must be running):
 #   - Coupa wave 1 (IN10, IN20, SG10) rolled out DEV -> QA and passed
 #   - Ariba DEV waiting for its import files
-#   - testers have run some UAT; one case failed because someone changed GST5 by hand in QA
+#   - drift watch ran once (no drift); then someone changed GST5 by hand in QA
+#   - testers have run some UAT; one case failed because of that change
+# Demo: "Check drift" → Diagnose & fix → drop demo\documents\acme-wave2-company-codes.xlsx → Steering pack
 # Then open the cockpit:  .\demo\p2p.ps1 cockpit --open
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
@@ -13,6 +15,9 @@ $mock = "http://127.0.0.1:8765"
 & $p2p rollout run --template coupa-company-code --answers demo\rollout\coupa-company-codes.csv --stages coupa-dev coupa-qa --apply | Out-Null
 Invoke-RestMethod -Method Post "$mock/coupa-qa/demo/users" -ContentType "application/json" -Body '{"login":"apac.controller"}' | Out-Null
 & $p2p rollout run --template coupa-company-code --answers demo\rollout\coupa-company-codes.csv --stages coupa-dev coupa-qa --apply | Select-String "==="
+
+# Drift watch baseline: everything still matches
+& $p2p watch | Select-Object -First 1
 
 # Someone "quickly fixes" a tax rate by hand in QA...
 Invoke-RestMethod -Method Post "$mock/coupa-qa/demo/edit" -ContentType "application/json" `

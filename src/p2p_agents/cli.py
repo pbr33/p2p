@@ -357,7 +357,41 @@ def cmd_cockpit(args) -> None:
         import webbrowser
 
         threading.Timer(0.8, webbrowser.open, [f"http://{args.host}:{args.port}"]).start()
-    serve(args.host, args.port)
+    serve(args.host, args.port, watch_every=args.watch_every)
+
+
+def cmd_watch(args) -> None:
+    import time
+
+    from p2p_agents.settings import CONFIG_DIR
+    from p2p_agents.watch import check_drift
+    from p2p_agents.workspace import RUNS_DIR
+
+    while True:
+        r = check_drift(RUNS_DIR, CONFIG_DIR)
+        print(f"{r['last_check']}: checked {len(r['checked'])} environment(s), {len(r['new_alerts'])} new alert(s)"
+              + (f", Teams: {r['teams']}" if "teams" in r else ""))
+        for a in r["new_alerts"]:
+            print(f"  DRIFT {a['environment']} ({a['run']}) -> {a['status']}")
+            for f in a["failed"][:5]:
+                print(f"     {f}")
+        for e in r["errors"]:
+            print(f"  ERROR {e}")
+        if not args.every:
+            sys.exit(1 if r["new_alerts"] else 0)
+        time.sleep(args.every * 60)
+
+
+def cmd_consistency(args) -> None:
+    from p2p_agents.rollout.consistency import consistency
+    from p2p_agents.settings import CONFIG_DIR
+    from p2p_agents.workspace import RUNS_DIR
+
+    r = consistency(RUNS_DIR, CONFIG_DIR)
+    print(f"{r['company_codes']} company codes checked")
+    for f in r["findings"]:
+        print(f"  {f['severity'].upper():7} {f['kind']:9} {f['entity']:6} {f['message']}")
+    sys.exit(1 if any(f["severity"] == "error" for f in r["findings"]) else 0)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -456,7 +490,13 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8770)
     p.add_argument("--open", action="store_true", help="open it in the browser")
+    p.add_argument("--watch-every", type=int, default=0, metavar="MIN", help="run the drift watch every MIN minutes")
     p.set_defaults(func=cmd_cockpit)
+    p = sub.add_parser("watch", help="re-test passed environments and alert on configuration drift")
+    p.add_argument("--every", type=int, default=0, metavar="MIN", help="repeat every MIN minutes (default: once)")
+    p.set_defaults(func=cmd_watch)
+    p = sub.add_parser("consistency", help="conflicts and outliers across all company codes (exit 1 on conflicts)")
+    p.set_defaults(func=cmd_consistency)
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(message)s")

@@ -233,10 +233,15 @@ class TemplateRolloutAgent:
         inst = self._instance(name)
         prev = self.state.stages.get(name)
         tests = number(self._verify(inst))
-        stage = StageResult(instance=name, status=self._status(tests), at=datetime.now(timezone.utc), applied=True,
+        status = self._status(tests)
+        fails = summarize(tests)["fail"]
+        note = ("re-tested: all checks pass" if status == "passed"
+                else f"re-tested: {fails} check(s) fail — the configuration no longer matches the template" if fails
+                else "re-tested: waiting for import files to be loaded")
+        stage = StageResult(instance=name, status=status, at=datetime.now(timezone.utc), applied=True,
                             actions=prev.actions if prev else [], results=prev.results if prev else [],
                             changed=prev.changed if prev else {}, import_files=prev.import_files if prev else [],
-                            tests=tests, note="re-verified")
+                            tests=tests, note=note)
         self._save(stage)
         return stage
 
