@@ -296,6 +296,56 @@ def cmd_rollout_uat(args) -> None:
     print(f"{n} UAT cases written to {csv_path} and {md_path}")
 
 
+def _terminal_approval(summary: str) -> bool:
+    print(f"\n  ⚠  The copilot wants to change systems:\n     {summary}")
+    try:
+        return input("     Approve? type 'yes' to run: ").strip().lower() in ("yes", "y", "haan", "ha")
+    except EOFError:
+        return False
+
+
+def cmd_ask(args) -> None:
+    from p2p_agents.agents.copilot import CopilotAgent
+
+    copilot = CopilotAgent(approve=_terminal_approval)
+    print(copilot.ask(" ".join(args.question)))
+
+
+def cmd_chat(args) -> None:
+    from p2p_agents.agents.copilot import CopilotAgent
+
+    copilot = CopilotAgent(approve=_terminal_approval)
+    print("P2P Copilot — ask in English or Hindi. 'new' starts over, 'exit' quits.")
+    while True:
+        try:
+            text = input("\nyou> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if text.lower() in ("exit", "quit", "q"):
+            return
+        if text.lower() == "new":
+            copilot.reset()
+            continue
+        if not text:
+            continue
+        try:
+            print("\ncopilot> " + copilot.ask(text))
+        except Exception as e:  # noqa: BLE001 - keep the chat open
+            print(f"\ncopilot> (error) {_ai_error(e)}")
+
+
+def cmd_cockpit(args) -> None:
+    from p2p_agents.cockpit import serve
+
+    if args.open:
+        import threading
+        import webbrowser
+
+        threading.Timer(0.8, webbrowser.open, [f"http://{args.host}:{args.port}"]).start()
+    serve(args.host, args.port)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="p2p", description="Agentic P2P orchestration and run-support")
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -377,6 +427,17 @@ def main(argv: list[str] | None = None) -> None:
     rollout_common(r)
     r.add_argument("--ai", action="store_true", help="add AI-suggested cases")
     r.set_defaults(func=cmd_rollout_uat)
+
+    p = sub.add_parser("ask", help="ask the P2P Copilot one question (English or Hindi)")
+    p.add_argument("question", nargs="+")
+    p.set_defaults(func=cmd_ask)
+    p = sub.add_parser("chat", help="conversation with the P2P Copilot")
+    p.set_defaults(func=cmd_chat)
+    p = sub.add_parser("cockpit", help="Go-Live Cockpit web page with the Copilot built in")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8770)
+    p.add_argument("--open", action="store_true", help="open it in the browser")
+    p.set_defaults(func=cmd_cockpit)
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(message)s")

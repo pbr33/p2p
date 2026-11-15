@@ -86,6 +86,7 @@ class TemplateRolloutAgent:
         self.llm = llm
         run_dir.mkdir(parents=True, exist_ok=True)
         self.state = self._load_state()
+        self.state.answers = str(Path(answers).resolve())
 
     # ───────── state ─────────
 

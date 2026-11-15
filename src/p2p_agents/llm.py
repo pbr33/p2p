@@ -20,6 +20,15 @@ DEFAULT_MODEL = os.environ.get("P2P_MODEL", "claude-opus-5-5")
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
+def default_client() -> tuple[Any, bool]:
+    """(client, first_party). Claude on Microsoft Foundry is used when ANTHROPIC_FOUNDRY_BASE_URL is set;
+    P2P_MODEL must then name the Foundry deployment (e.g. claude-opus-4-8)."""
+    base_url = os.environ.get("ANTHROPIC_FOUNDRY_BASE_URL")
+    if base_url:
+        return anthropic.AnthropicFoundry(api_key=os.environ.get("ANTHROPIC_FOUNDRY_API_KEY"), base_url=base_url), False
+    return anthropic.Anthropic(), True
+
+
 class LLMError(RuntimeError):
     pass
 
@@ -46,23 +55,25 @@ class ToolRun:
     final_text: str
     turns: int
     tool_calls: list[dict[str, Any]]
+    messages: list[dict[str, Any]] | None = None  # full conversation, to continue it next turn
 
 
 class LLM:
     def __init__(self, client: Any | None = None, model: str | None = None, effort: str = "high"):
-        self.client = client or anthropic.Anthropic()
+        # Server-side refusal fallbacks exist only on the first-party API, not on Foundry
+        self.client, self.first_party = (client, True) if client is not None else default_client()
         self.model = model or DEFAULT_MODEL
         self.effort = effort
 
     def _send(self, max_tokens: int, **params: Any) -> Any:
-        with self.client.beta.messages.stream(
-            model=self.model,
-            max_tokens=max_tokens,
-            output_config={"effort": self.effort},
-            betas=[FALLBACK_BETA],
-            extra_body={"fallbacks": "default"},
-            **params,
-        ) as stream:
+        if self.first_party:
+            stream_ctx = self.client.beta.messages.stream(
+                model=self.model, max_tokens=max_tokens, output_config={"effort": self.effort},
+                betas=[FALLBACK_BETA], extra_body={"fallbacks": "default"}, **params)
+        else:
+            stream_ctx = self.client.messages.stream(
+                model=self.model, max_tokens=max_tokens, output_config={"effort": self.effort}, **params)
+        with stream_ctx as stream:
             response = stream.get_final_message()
         if response.stop_reason == "refusal":
             details = getattr(response, "stop_details", None)
@@ -81,10 +92,11 @@ class LLM:
         return self._text(response)
 
     def run_tools(self, system: str, prompt: str, tools: list[Tool], max_turns: int = 15,
-                  max_tokens: int = 32000) -> ToolRun:
+                  max_tokens: int = 32000, history: list[dict[str, Any]] | None = None) -> ToolRun:
+        """Tool-use loop. Pass `history` (a previous ToolRun.messages) to continue a conversation."""
         by_name = {t.name: t for t in tools}
         definitions = [t.definition() for t in tools]
-        messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
+        messages: list[dict[str, Any]] = [*(history or []), {"role": "user", "content": prompt}]
         calls: list[dict[str, Any]] = []
 
         for turn in range(1, max_turns + 1):
@@ -98,7 +110,7 @@ class LLM:
 
             uses = [b for b in response.content if b.type == "tool_use"]
             if not uses:
-                return ToolRun(final_text=self._text(response), turns=turn, tool_calls=calls)
+                return ToolRun(final_text=self._text(response), turns=turn, tool_calls=calls, messages=messages)
 
             results, finished = [], False
             for use in uses:
@@ -124,6 +136,6 @@ class LLM:
                 finished = finished or (ok and tool.terminal)
             messages.append({"role": "user", "content": results})
             if finished:
-                return ToolRun(final_text=self._text(response), turns=turn, tool_calls=calls)
+                return ToolRun(final_text=self._text(response), turns=turn, tool_calls=calls, messages=messages)
 
         raise LLMError(f"agent did not finish within {max_turns} turns")

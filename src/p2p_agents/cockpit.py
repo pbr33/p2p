@@ -1,0 +1,154 @@
+"""Go-Live Cockpit: a local web page for the whole team, with the Copilot built in.
+
+    p2p cockpit            → http://127.0.0.1:8770
+
+Shows every roll-out: readiness score, DEV → QA pipeline with test results, what blocks
+go-live, UAT progress (from the results testers type into uat-scripts.csv), manual steps
+(tick them off here) and the configuration checklist. "Re-test" re-reads an environment
+and runs the tests again without changing it, so drift shows up. The Copilot panel answers
+questions and prepares changes; a system change only runs after someone clicks Approve.
+
+Standard library only; binds to 127.0.0.1 by default (no authentication — do not expose it).
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from typing import Any
+from urllib.parse import unquote
+
+from p2p_agents.agents.copilot import CopilotAgent, VerifyArgs
+from p2p_agents.rollout.reports import set_manual_done
+from p2p_agents.settings import CONFIG_DIR, load_instances
+from p2p_agents.workspace import RUNS_DIR, all_runs, load_run, run_summary
+
+PAGE = Path(__file__).with_name("cockpit.html")
+
+
+class Cockpit:
+    def __init__(self, config_dir: Path = CONFIG_DIR, runs_root: Path = RUNS_DIR, copilot: CopilotAgent | None = None):
+        self.config_dir = config_dir
+        self.runs_root = runs_root
+        # Changes requested in the chat wait for the Approve button
+        self.copilot = copilot or CopilotAgent(approve=lambda summary: None, config_dir=config_dir, runs_root=runs_root)
+        self.lock = threading.Lock()  # one copilot conversation, one change at a time
+
+    # ───── API ─────
+
+    def handle(self, method: str, path: str, body: dict[str, Any]) -> tuple[int, Any]:
+        parts = [unquote(p) for p in path.strip("/").split("/")]
+        if method == "GET" and path == "/api/runs":
+            return 200, all_runs(self.runs_root)
+        if method == "GET" and path == "/api/envs":
+            return 200, [{"name": n, "platform": i.platform, "production": i.is_production}
+                         for n, i in load_instances(self.config_dir).items()]
+        if method == "GET" and len(parts) == 3 and parts[:2] == ["api", "runs"]:
+            run_dir, state = load_run(parts[2], self.runs_root)
+            return 200, run_summary(run_dir, state, detail=True)
+        if method == "POST" and len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "verify":
+            with self.lock:
+                return 200, self.copilot.t_verify(VerifyArgs(run=parts[2], instance=str(body.get("instance", ""))))
+        if method == "POST" and len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "manual":
+            run_dir, _ = load_run(parts[2], self.runs_root)
+            if not re.fullmatch(r"M\d+", str(body.get("step", ""))):
+                return 400, {"error": "step must look like M1"}
+            return 200, set_manual_done(run_dir, body["step"], bool(body.get("done", True)), str(body.get("by", ""))[:60])
+        if method == "POST" and path == "/api/ask":
+            message = str(body.get("message", "")).strip()
+            if not message:
+                return 400, {"error": "empty message"}
+            with self.lock:
+                try:
+                    reply = self.copilot.ask(message[:4000])
+                except Exception as e:  # noqa: BLE001 - shown in the chat
+                    return 200, {"error": _friendly(e), "approvals": self._approvals()}
+            return 200, {"reply": reply, "approvals": self._approvals()}
+        if method == "GET" and path == "/api/approvals":
+            return 200, self._approvals()
+        if method == "POST" and len(parts) == 3 and parts[:2] == ["api", "approvals"]:
+            with self.lock:
+                return 200, self.copilot.decide(parts[2], bool(body.get("approve")))
+        if method == "POST" and path == "/api/chat/reset":
+            self.copilot.reset()
+            return 200, {"ok": True}
+        return 404, {"error": f"no route {method} {path}"}
+
+    def _approvals(self) -> list[dict[str, str]]:
+        return [{"id": p.id, "summary": p.summary} for p in self.copilot.pending.values()]
+
+
+def _friendly(e: Exception) -> str:
+    try:
+        import anthropic
+
+        if isinstance(e, anthropic.AuthenticationError):
+            return "The Copilot needs a valid Anthropic API key (ANTHROPIC_API_KEY, e.g. in demo\\.env). Everything else on this page works without it."
+        if isinstance(e, anthropic.APIConnectionError):
+            return "Could not reach the Claude API — check the network or proxy."
+        if isinstance(e, anthropic.APIError):
+            if "credit balance" in str(e):
+                return ("The Anthropic account has no credit left. Add credit at console.anthropic.com → "
+                        "Plans & Billing, then ask again. Everything else on this page works without it.")
+            return f"Claude API error: {getattr(e, 'message', e)}"
+    except ImportError:
+        pass
+    return str(e)
+
+
+def make_handler(cockpit: Cockpit) -> type[BaseHTTPRequestHandler]:
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args: Any) -> None:  # quiet
+            pass
+
+        def _send(self, status: int, payload: Any, content_type: str = "application/json; charset=utf-8") -> None:
+            data = payload if isinstance(payload, bytes) else json.dumps(payload, default=str, ensure_ascii=False).encode()
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def _dispatch(self, method: str) -> None:
+            path = self.path.split("?")[0]
+            if method == "GET" and path in ("/", "/index.html"):
+                return self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+            body: dict[str, Any] = {}
+            if method == "POST":
+                if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
+                    return self._send(415, {"error": "send application/json"})  # also blocks simple cross-site posts
+                length = int(self.headers.get("Content-Length") or 0)
+                try:
+                    body = json.loads(self.rfile.read(length) or b"{}")
+                except ValueError:
+                    return self._send(400, {"error": "invalid JSON"})
+            try:
+                status, payload = cockpit.handle(method, path, body)
+            except (LookupError, ValueError, FileNotFoundError) as e:
+                status, payload = 400, {"error": str(e)}
+            except Exception as e:  # noqa: BLE001
+                status, payload = 500, {"error": _friendly(e)}
+            self._send(status, payload)
+
+        def do_GET(self) -> None:
+            self._dispatch("GET")
+
+        def do_POST(self) -> None:
+            self._dispatch("POST")
+
+    return Handler
+
+
+def serve(host: str = "127.0.0.1", port: int = 8770, cockpit: Cockpit | None = None) -> None:
+    server = ThreadingHTTPServer((host, port), make_handler(cockpit or Cockpit()))
+    print(f"Go-Live Cockpit on http://{host}:{port}  (Ctrl+C to stop)")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
