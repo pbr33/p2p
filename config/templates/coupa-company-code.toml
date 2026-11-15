@@ -1,0 +1,217 @@
+# Standard Coupa invoicing setup for a new S/4HANA company code / legal entity.
+# Adjust the objects to your design (segment count, rule names, approval steps) once; every
+# company code after that is just one row in the answers file.
+description = "Coupa invoicing baseline per S/4HANA company code"
+platform = "coupa"
+label = "${company_code}"
+
+[params.company_code]
+question = "S/4HANA company code (4 characters)"
+pattern = "^[A-Z0-9]{4}$"
+example = "IN10"
+
+[params.legal_entity]
+question = "Legal entity name"
+example = "Acme India Pvt Ltd"
+
+[params.country]
+question = "Country (ISO code)"
+pattern = "^[A-Z]{2}$"
+example = "IN"
+
+[params.currency]
+question = "Company code currency (ISO code)"
+pattern = "^[A-Z]{3}$"
+example = "INR"
+
+[params.tax_codes]
+question = "Tax codes for this entity"
+type = "list"
+fields = ["code", "rate:number", "description"]
+example = "GST18:18:GST 18%;GST5:5:GST 5%"
+
+[params.invoice_approval_limit]
+question = "Invoice amount above which the finance controller must also approve"
+type = "number"
+example = "100000"
+
+[params.ap_approver]
+question = "Coupa login of the AP / first-level approver"
+example = "ap.india"
+
+[params.finance_approver]
+question = "Coupa login of the finance controller"
+example = "cfo.india"
+
+[params.buyer_group]
+question = "Content group for this entity's buyers"
+required = false
+default = "${legal_entity} Buyers"
+
+# ─────────────── configuration objects ───────────────
+
+[[objects]]
+type = "account_types"
+data = { name = "${company_code} - ${legal_entity}", currency = { code = "${currency}" }, active = true, "segment-count" = 4 }
+
+[[objects]]
+type = "lookup_values"
+data = { lookup = { name = "Company Code" }, name = "${company_code} ${legal_entity}", "external-ref-code" = "${company_code}", active = true }
+
+[[objects]]
+type = "tax_codes"
+for_each = "tax_codes"
+data = { code = "${item.code}", description = "${item.description}", percentage = "${item.rate}", country = { code = "${country}" }, active = true }
+
+[[objects]]
+type = "content_groups"
+data = { name = "${buyer_group}", description = "Buyers of ${legal_entity} (company code ${company_code})" }
+
+[[objects]]
+type = "approval_chains"
+data = { name = "${company_code} AP Approval", "approval-chain-steps" = [
+    { position = 1, approver = { login = "${ap_approver}" } },
+] }
+
+[[objects]]
+type = "approval_chains"
+data = { name = "${company_code} Finance Approval", "approval-chain-steps" = [
+    { position = 1, approver = { login = "${ap_approver}" } },
+    { position = 2, approver = { login = "${finance_approver}" } },
+] }
+
+[[objects]]
+type = "approval_rules"
+data = { name = "${company_code} invoices", "document-type" = "invoice", "amount-threshold" = 0, currency = { code = "${currency}" }, "account-type" = { name = "${company_code} - ${legal_entity}" }, "approval-chain" = { name = "${company_code} AP Approval" } }
+
+[[objects]]
+type = "approval_rules"
+data = { name = "${company_code} invoices over limit", "document-type" = "invoice", "amount-threshold" = "${invoice_approval_limit}", currency = { code = "${currency}" }, "account-type" = { name = "${company_code} - ${legal_entity}" }, "approval-chain" = { name = "${company_code} Finance Approval" } }
+
+# Shared by every company code: carries the S/4HANA company code on the invoice export
+[[objects]]
+type = "custom_fields"
+data = { "object-type" = "invoice", name = "s4-company-code", "data-type" = "string", required = true }
+
+# ─────────────── business-rule checks (run in every environment) ───────────────
+
+[[checks]]
+id = "COA-CURRENCY"
+description = "Chart of accounts uses the company code currency"
+type = "account_types"
+key = "${company_code} - ${legal_entity}"
+field = "currency.code"
+value = "${currency}"
+
+[[checks]]
+id = "COA-ACTIVE"
+description = "Chart of accounts is active"
+type = "account_types"
+key = "${company_code} - ${legal_entity}"
+field = "active"
+value = true
+
+[[checks]]
+id = "TAX-RATE"
+for_each = "tax_codes"
+description = "Tax code ${item.code} rate is ${item.rate}%"
+type = "tax_codes"
+key = "${item.code}"
+field = "percentage"
+value = "${item.rate}"
+
+[[checks]]
+id = "APPR-LIMIT"
+description = "Finance approval starts above ${invoice_approval_limit} ${currency}"
+type = "approval_rules"
+key = "${company_code} invoices over limit"
+field = "amount-threshold"
+value = "${invoice_approval_limit}"
+
+[[checks]]
+id = "APPR-2STEP"
+description = "Finance approval chain has two steps (AP, then controller)"
+type = "approval_chains"
+key = "${company_code} Finance Approval"
+field = "approval-chain-steps"
+op = "len_eq"
+value = 2
+
+[[checks]]
+id = "S4-FIELD"
+description = "Invoice carries the S/4HANA company code (mandatory field)"
+type = "custom_fields"
+key = "invoice|s4-company-code"
+field = "required"
+value = true
+
+# ─────────────── UAT cases ───────────────
+
+[[uat]]
+id = "UAT-01"
+area = "Invoice approval"
+scenario = "Invoice below the limit needs only AP approval"
+steps = [
+  "Log in to Coupa as an AP clerk",
+  "Create an invoice against a PO for chart of accounts '${company_code} - ${legal_entity}' in ${currency}, amount just below ${invoice_approval_limit}",
+  "Select S/4 company code ${company_code} and submit",
+]
+expected = "The invoice goes to ${ap_approver} only; after approval its status is Approved"
+
+[[uat]]
+id = "UAT-02"
+area = "Invoice approval"
+scenario = "Invoice above the limit also needs the finance controller"
+steps = [
+  "Create an invoice for '${company_code} - ${legal_entity}' in ${currency} above ${invoice_approval_limit}",
+  "Submit, then approve as ${ap_approver}",
+]
+expected = "After ${ap_approver} approves, the invoice goes to ${finance_approver}; it is Approved only after both"
+
+[[uat]]
+id = "UAT-03"
+for_each = "tax_codes"
+area = "Tax"
+scenario = "Tax code ${item.code} calculates ${item.rate}%"
+steps = [
+  "Create an invoice for '${company_code} - ${legal_entity}' with one line of 1,000 ${currency}",
+  "Select tax code ${item.code} on the line",
+]
+expected = "Tax is ${item.rate}% of 1,000 ${currency} and tax code ${item.code} shows on the invoice and in the S/4HANA posting"
+priority = "Medium"
+
+[[uat]]
+id = "UAT-04"
+area = "S/4HANA integration"
+scenario = "Approved invoice posts in S/4HANA company code ${company_code}"
+steps = [
+  "Approve an invoice for '${company_code} - ${legal_entity}'",
+  "Wait for the invoice export / integration run",
+  "In S/4HANA open the posted document (MIR4 or FB03)",
+]
+expected = "The document is posted in company code ${company_code} with the same amount, tax and supplier; field s4-company-code = ${company_code}"
+
+[[uat]]
+id = "UAT-05"
+area = "Visibility"
+scenario = "Only ${legal_entity} buyers see the entity's content"
+steps = [
+  "Log in as a buyer assigned to content group '${buyer_group}' and search the catalogue",
+  "Log in as a buyer of another entity and repeat",
+]
+expected = "Only members of '${buyer_group}' see ${legal_entity} suppliers and catalogues"
+priority = "Medium"
+
+# ─────────────── steps that stay manual ───────────────
+
+[[manual]]
+item = "Load account (segment) values for chart of accounts '${company_code} - ${legal_entity}' (account import)"
+owner = "Coupa functional"
+
+[[manual]]
+item = "Assign ${legal_entity} buyers to content group '${buyer_group}'"
+owner = "Coupa admin"
+
+[[manual]]
+item = "Confirm the Coupa → S/4HANA invoice integration maps s4-company-code for ${company_code}"
+owner = "Integration team"

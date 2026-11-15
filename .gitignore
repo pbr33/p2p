@@ -9,3 +9,5 @@ outbox/
 audit/
 docs/generated/
 demo/.env
+demo/state/
+/rollout/

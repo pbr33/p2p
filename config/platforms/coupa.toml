@@ -57,6 +57,19 @@ update_path = "/api/approval_rules/{id}"
 key = "name"
 references = { "approval-chain.name" = "approval_chains", "account-type.name" = "account_types" }
 
+[objects.lookup_values]
+description = "Lookup values, e.g. the company code segment of the chart of accounts"
+list_path = "/api/lookup_values"
+create_path = "/api/lookup_values"
+update_path = "/api/lookup_values/{id}"
+key = "lookup.name+external-ref-code"
+
+[objects.users]
+description = "Users (read only: checked as approvers, never created by the agents)"
+list_path = "/api/users"
+key = "login"
+read_only = true
+
 [objects.custom_fields]
 description = "Custom fields on requisitions, invoices and suppliers"
 list_path = "/api/custom_fields"

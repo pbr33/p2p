@@ -39,6 +39,8 @@ class ObjectTypeConfig(BaseModel):
     volatile: list[str] = Field(default_factory=list)
     # Fields that cannot change once the object exists in the target
     immutable: list[str] = Field(default_factory=list)
+    # Extracted only so references to it can be checked (e.g. users); never diffed or written
+    read_only: bool = False
 
 
 class PlatformConfig(BaseModel):

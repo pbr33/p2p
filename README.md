@@ -7,6 +7,7 @@ Agentic orchestration and run-support for a multi-platform Procure-to-Pay landsc
 | **ConfigReplication** | Extracts platform configuration, diffs staging against production, flags schema conflicts and missing dependencies, and replicates in dependency order with an approval gate and audit trail |
 | **DocuGen** | Generates Functional Requirements (FRD) and Technical Design (TDD) documents from live configuration, and detects when they are out of date |
 | **Triage & Run-Support** | Reads ServiceNow incidents, investigates with similar incidents, platform logs and configuration, posts a root-cause analysis and routes to the right group |
+| **Template Rollout** | Sets up a standard configuration for many company codes from one template and a few answers each, promotes it DEV → QA only when the previous environment's tests pass, and produces a configuration checklist, test results, an optional AI QA review and UAT scripts |
 
 The design and requirements traceability are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -48,6 +49,33 @@ p2p triage --queue P2P-Triage --apply
 ```
 
 `diff` exits with 1 when there are blocking issues, so it can gate a CI/CD pipeline.
+
+## Company-code roll-out from a template
+
+A template (`config/templates/*.toml`) holds the standard setup once: the questions to ask
+(company code, legal entity, currency, tax codes, approvers...), the objects to create with
+`${placeholders}`, business-rule checks, UAT cases and the steps that stay manual. Shipped:
+`coupa-company-code` and `ariba-company-code`.
+
+```bash
+p2p rollout templates
+p2p rollout questions --template coupa-company-code --out company-codes.csv   # one row per company code
+p2p rollout questions --template coupa-company-code --out company-codes.toml --interactive
+
+# Dry run, then configure DEV, test it, and only if everything passed configure and test QA
+p2p rollout run --template coupa-company-code --answers company-codes.csv --stages coupa-dev coupa-qa
+p2p rollout run --template coupa-company-code --answers company-codes.csv --stages coupa-dev coupa-qa \
+                --apply --review --ai-uat
+
+# Ariba: the agent writes CIG import files; after they are loaded and the realm re-exported:
+p2p rollout verify --template ariba-company-code --answers company-codes.csv --instance ariba-dev
+```
+
+In each environment the agent first checks that every approver and parent object exists
+(nothing is written otherwise), then applies, then reads the configuration back and tests
+it. Re-running is safe: objects that are already correct are left alone. The run folder
+(`rollout/<template>-<answers>/`) holds `checklist.md/.csv`, `tests-<env>.csv`,
+`uat-scripts.csv/.md` (opens in Excel), `review-<env>.md` and the audit log.
 
 ## Tests
 

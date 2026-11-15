@@ -11,6 +11,27 @@ from p2p_agents.settings import InstanceConfig, ObjectTypeConfig, PlatformConfig
 log = logging.getLogger(__name__)
 
 
+def build_item(platform: str, cfg: ObjectTypeConfig, raw: dict[str, Any]) -> ConfigItem | None:
+    """Wrap a raw object as a ConfigItem: natural key, platform ID and references. None without a key."""
+    key = natural_key(raw, cfg.key)
+    if key is None:
+        return None
+    deps = [
+        DependencyRef(object_type=ref_type, key=str(value), path=path)
+        for path, ref_type in cfg.references.items()
+        for value in get_values(raw, path)
+    ]
+    source_id = raw.get(cfg.id_field)
+    return ConfigItem(
+        platform=platform,
+        object_type=cfg.name,
+        key=key,
+        data=raw,
+        source_id=None if source_id is None else str(source_id),
+        depends_on=deps,
+    )
+
+
 class Connector(ABC):
     """Reads and writes one platform instance's configuration objects."""
 
@@ -45,24 +66,10 @@ class Connector(ABC):
         return Snapshot(platform=self.platform.name, instance=self.instance.name, object_types=types, items=items)
 
     def to_item(self, cfg: ObjectTypeConfig, raw: dict[str, Any]) -> ConfigItem | None:
-        key = natural_key(raw, cfg.key)
-        if key is None:
+        item = build_item(self.platform.name, cfg, raw)
+        if item is None:
             log.warning("%s: skipping object without natural key %r: %s", cfg.name, cfg.key, str(raw)[:200])
-            return None
-        deps = [
-            DependencyRef(object_type=ref_type, key=str(value), path=path)
-            for path, ref_type in cfg.references.items()
-            for value in get_values(raw, path)
-        ]
-        source_id = raw.get(cfg.id_field)
-        return ConfigItem(
-            platform=self.platform.name,
-            object_type=cfg.name,
-            key=key,
-            data=raw,
-            source_id=None if source_id is None else str(source_id),
-            depends_on=deps,
-        )
+        return item
 
     @abstractmethod
     def fetch(self, cfg: ObjectTypeConfig) -> Iterator[dict[str, Any]]:

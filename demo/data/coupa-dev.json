@@ -1,0 +1,22 @@
+{
+  "account_types": [
+    {"id": 7001, "name": "US Operations", "currency": {"code": "USD"}, "active": true, "segment-count": 4}
+  ],
+  "lookup_values": [
+    {"id": 7101, "lookup": {"name": "Company Code"}, "name": "US01 Acme Inc", "external-ref-code": "US01", "active": true}
+  ],
+  "tax_codes": [
+    {"id": 7201, "code": "US-EXEMPT", "description": "US exempt", "percentage": 0.0, "country": {"code": "US"}, "active": true}
+  ],
+  "exchange_rates": [],
+  "business_groups": [
+    {"id": 7301, "name": "Global Buyers", "description": "All buyers worldwide"}
+  ],
+  "approval_chains": [],
+  "approval_rules": [],
+  "custom_fields": [],
+  "users": [
+    {"id": 7901, "login": "ap.india"}, {"id": 7902, "login": "cfo.india"},
+    {"id": 7903, "login": "ap.sg"}, {"id": 7904, "login": "apac.controller"}
+  ]
+}

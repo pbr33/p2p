@@ -1,0 +1,3 @@
+company_code,legal_entity,purchasing_unit,tax_codes
+IN10,Acme India Pvt Ltd,,GST18:G8:GST 18%;GST5:G5:GST 5%
+SG10,Acme Singapore Pte Ltd,PU_SG_MAIN,GST9:S9:Singapore GST 9%

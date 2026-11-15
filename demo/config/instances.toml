@@ -19,6 +19,36 @@ client_id_env = "DEMO_COUPA_CLIENT_ID"
 client_secret_env = "DEMO_COUPA_CLIENT_SECRET"
 is_production = true
 
+# Template roll-out environments (DEV → QA)
+[coupa-dev]
+platform = "coupa"
+base_url = "http://127.0.0.1:8765/coupa-dev"
+auth = "oauth2_client_credentials"
+token_url = "/oauth2/token"
+scopes = ["core.common.read", "core.common.write"]
+client_id_env = "DEMO_COUPA_CLIENT_ID"
+client_secret_env = "DEMO_COUPA_CLIENT_SECRET"
+
+[coupa-qa]
+platform = "coupa"
+base_url = "http://127.0.0.1:8765/coupa-qa"
+auth = "oauth2_client_credentials"
+token_url = "/oauth2/token"
+scopes = ["core.common.read", "core.common.write"]
+client_id_env = "DEMO_COUPA_CLIENT_ID"
+client_secret_env = "DEMO_COUPA_CLIENT_SECRET"
+
+# Working copies of demo/data/ariba/{dev,qa}; demo/load_ariba_import.py plays the admin who loads the import files
+[ariba-dev]
+platform = "ariba"
+bundle_dir = "demo/state/ariba/dev"
+outbox_dir = "demo/outbox/ariba-dev"
+
+[ariba-qa]
+platform = "ariba"
+bundle_dir = "demo/state/ariba/qa"
+outbox_dir = "demo/outbox/ariba-qa"
+
 [pdap-dev]
 platform = "pdap"
 bundle_dir = "demo/data/pdap/dev100"

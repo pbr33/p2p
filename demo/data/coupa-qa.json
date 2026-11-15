@@ -1,0 +1,22 @@
+{
+  "account_types": [
+    {"id": 8001, "name": "US Operations", "currency": {"code": "USD"}, "active": true, "segment-count": 4}
+  ],
+  "lookup_values": [
+    {"id": 8101, "lookup": {"name": "Company Code"}, "name": "US01 Acme Inc", "external-ref-code": "US01", "active": true}
+  ],
+  "tax_codes": [
+    {"id": 8201, "code": "GST18", "description": "GST 18%", "percentage": 12.0, "country": {"code": "IN"}, "active": true,
+     "_note": "created by hand in QA with the wrong rate"}
+  ],
+  "exchange_rates": [],
+  "business_groups": [
+    {"id": 8301, "name": "Global Buyers", "description": "All buyers worldwide"}
+  ],
+  "approval_chains": [],
+  "approval_rules": [],
+  "custom_fields": [],
+  "users": [
+    {"id": 8901, "login": "ap.india"}, {"id": 8902, "login": "cfo.india"}, {"id": 8903, "login": "ap.sg"}
+  ]
+}

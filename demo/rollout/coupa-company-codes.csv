@@ -1,0 +1,4 @@
+company_code,legal_entity,country,currency,tax_codes,invoice_approval_limit,ap_approver,finance_approver,buyer_group
+IN10,Acme India Pvt Ltd,IN,INR,GST18:18:GST 18%;GST5:5:GST 5%,100000,ap.india,cfo.india,
+IN20,Acme Services India Pvt Ltd,IN,INR,GST18:18:GST 18%;GST5:5:GST 5%,250000,ap.india,cfo.india,
+SG10,Acme Singapore Pte Ltd,SG,SGD,GST9:9:Singapore GST 9%,10000,ap.sg,apac.controller,APAC Buyers

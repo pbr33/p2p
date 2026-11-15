@@ -78,7 +78,7 @@ def compare(source: Snapshot, target: Snapshot, platform: PlatformConfig) -> Dif
                 ))
 
     src_idx, tgt_idx = source.index(), target.index()
-    types = [t for t in source.object_types if t in platform.objects]
+    types = [t for t in source.object_types if t in platform.objects and not platform.objects[t].read_only]
     diffs: list[ItemDiff] = []
 
     for object_type in types:
@@ -110,12 +110,14 @@ def compare(source: Snapshot, target: Snapshot, platform: PlatformConfig) -> Dif
                                 f"({c.target!r} in {target.instance}, {c.source!r} in {source.instance})",
                     ))
 
-    issues.extend(dependency_issues(diffs, source, target))
+    read_only = {name for name, cfg in platform.objects.items() if cfg.read_only}
+    issues.extend(dependency_issues(diffs, source, target, read_only))
     return DiffReport(platform=source.platform, source_instance=source.instance,
                       target_instance=target.instance, diffs=diffs, issues=issues)
 
 
-def dependency_issues(diffs: list[ItemDiff], source: Snapshot, target: Snapshot) -> list[Issue]:
+def dependency_issues(diffs: list[ItemDiff], source: Snapshot, target: Snapshot,
+                      read_only: set[str] = frozenset()) -> list[Issue]:
     """Every object that will be pushed must reference objects that exist in the target or are pushed too."""
     src_idx, tgt_idx = source.index(), target.index()
     moving = {(d.object_type, d.key) for d in diffs if d.status in ("added", "changed")}
@@ -130,7 +132,12 @@ def dependency_issues(diffs: list[ItemDiff], source: Snapshot, target: Snapshot)
             if dep.object_type not in extracted:
                 unverified.setdefault((object_type, dep.object_type), []).append(dep.key)
                 continue
-            where = "exists in neither instance" if ref not in src_idx else f"is missing in {target.instance}"
+            if dep.object_type in read_only:
+                where = f"is missing in {target.instance} ({dep.object_type} are not replicated; create it there first)"
+            elif ref not in src_idx:
+                where = "exists in neither instance"
+            else:
+                where = f"is missing in {target.instance}"
             issues.append(Issue(
                 severity="error", code="MISSING_DEPENDENCY", object_type=object_type, key=key,
                 message=f"references {dep.object_type} {dep.key!r} (at {dep.path}), which {where}",

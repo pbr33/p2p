@@ -1,4 +1,4 @@
-"""Local stand-ins for Coupa (sandbox + production) and ServiceNow, plus a dashboard.
+"""Local stand-ins for Coupa (sandbox, production, dev, qa) and ServiceNow, plus a dashboard.
 
     python demo/mock_server.py            # http://127.0.0.1:8765
 
@@ -23,7 +23,7 @@ STATE: dict = {}
 def reset() -> None:
     STATE.clear()
     STATE["coupa"] = {inst: json.loads((DATA / f"coupa-{inst}.json").read_text(encoding="utf-8"))
-                      for inst in ("sbx", "prod")}
+                      for inst in ("sbx", "prod", "dev", "qa")}
     STATE["sn"] = json.loads((DATA / "servicenow.json").read_text(encoding="utf-8"))
     STATE["next_id"] = 1000
 
@@ -82,6 +82,12 @@ class Handler(BaseHTTPRequestHandler):
                 if form.get("grant_type") != "client_credentials" or form.get("client_secret") != "demo-secret":
                     return self._send(401, {"error": "invalid_client"})
                 return self._send(200, {"access_token": f"demo-token-{inst}", "expires_in": 3600})
+            # Demo only: play the user administrator, e.g. POST /coupa-qa/demo/users {"login": "apac.controller"}
+            if parts[1:] == ["demo", "users"] and method == "POST":
+                STATE["next_id"] += 1
+                user = {"id": STATE["next_id"], "login": self._body()["login"]}
+                STATE["coupa"][inst]["users"].append(user)
+                return self._send(201, user)
             if self.headers.get("Authorization") != f"Bearer demo-token-{inst}":
                 return self._send(401, {"error": "unauthorized"})
             if len(parts) >= 3 and parts[1] == "api":
@@ -152,7 +158,7 @@ def dashboard() -> str:
     coupa = []
     for inst, types in STATE["coupa"].items():
         rows = "".join(
-            f"<tr><td>{esc(t)}</td><td>{esc(o.get('name') or o.get('code') or o.get('id'))}</td>"
+            f"<tr><td>{esc(t)}</td><td>{esc(o.get('name') or o.get('code') or o.get('login') or o.get('id'))}</td>"
             f"<td><pre>{esc({k: v for k, v in o.items() if k != 'id'})}</pre></td></tr>"
             for t, objs in types.items() for o in objs)
         coupa.append(f"<h3>Coupa {inst}</h3><table><tr><th>Type</th><th>Key</th><th>Data</th></tr>{rows}</table>")

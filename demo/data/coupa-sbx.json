@@ -1,39 +1,192 @@
 {
   "account_types": [
-    {"id": 1, "name": "US Operations", "currency": {"code": "USD"}, "active": true, "segment-count": 4},
-    {"id": 2, "name": "APAC Operations", "currency": {"code": "SGD"}, "active": true, "segment-count": 4}
+    {
+      "id": 1,
+      "name": "US Operations",
+      "currency": {
+        "code": "USD"
+      },
+      "active": true,
+      "segment-count": 4
+    },
+    {
+      "id": 2,
+      "name": "APAC Operations",
+      "currency": {
+        "code": "SGD"
+      },
+      "active": true,
+      "segment-count": 4
+    }
   ],
   "tax_codes": [
-    {"id": 10, "code": "VAT20", "description": "UK standard VAT", "percentage": 20.0, "country": {"code": "GB"}, "active": true},
-    {"id": 11, "code": "GST9", "description": "Singapore GST", "percentage": 9.0, "country": {"code": "SG"}, "active": true},
-    {"id": 12, "code": "US-EXEMPT", "description": "US tax exempt purchases", "percentage": 0.0, "country": {"code": "US"}, "active": true}
+    {
+      "id": 10,
+      "code": "VAT20",
+      "description": "UK standard VAT",
+      "percentage": 20.0,
+      "country": {
+        "code": "GB"
+      },
+      "active": true
+    },
+    {
+      "id": 11,
+      "code": "GST9",
+      "description": "Singapore GST",
+      "percentage": 9.0,
+      "country": {
+        "code": "SG"
+      },
+      "active": true
+    },
+    {
+      "id": 12,
+      "code": "US-EXEMPT",
+      "description": "US tax exempt purchases",
+      "percentage": 0.0,
+      "country": {
+        "code": "US"
+      },
+      "active": true
+    }
   ],
   "exchange_rates": [
-    {"id": 20, "from-currency": {"code": "USD"}, "to-currency": {"code": "SGD"}, "rate-date": "2026-11-01", "rate": 1.3512},
-    {"id": 21, "from-currency": {"code": "USD"}, "to-currency": {"code": "GBP"}, "rate-date": "2026-11-01", "rate": 0.7731}
+    {
+      "id": 20,
+      "from-currency": {
+        "code": "USD"
+      },
+      "to-currency": {
+        "code": "SGD"
+      },
+      "rate-date": "2026-11-01",
+      "rate": 1.3512
+    },
+    {
+      "id": 21,
+      "from-currency": {
+        "code": "USD"
+      },
+      "to-currency": {
+        "code": "GBP"
+      },
+      "rate-date": "2026-11-01",
+      "rate": 0.7731
+    }
   ],
   "business_groups": [
-    {"id": 30, "name": "Global Buyers", "description": "All buyers worldwide"},
-    {"id": 31, "name": "APAC Buyers", "description": "Buyers in Singapore and Australia"}
+    {
+      "id": 30,
+      "name": "Global Buyers",
+      "description": "All buyers worldwide"
+    },
+    {
+      "id": 31,
+      "name": "APAC Buyers",
+      "description": "Buyers in Singapore and Australia"
+    }
   ],
   "approval_chains": [
-    {"id": 40, "name": "Finance Approval", "approval-chain-steps": [
-      {"position": 1, "approver": {"login": "controller"}},
-      {"position": 2, "approver": {"login": "cfo"}}
-    ]},
-    {"id": 41, "name": "APAC Finance Approval", "approval-chain-steps": [
-      {"position": 1, "approver": {"login": "apac.controller"}}
-    ]}
+    {
+      "id": 40,
+      "name": "Finance Approval",
+      "approval-chain-steps": [
+        {
+          "position": 1,
+          "approver": {
+            "login": "controller"
+          }
+        },
+        {
+          "position": 2,
+          "approver": {
+            "login": "cfo"
+          }
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "name": "APAC Finance Approval",
+      "approval-chain-steps": [
+        {
+          "position": 1,
+          "approver": {
+            "login": "apac.controller"
+          }
+        }
+      ]
+    }
   ],
   "approval_rules": [
-    {"id": 50, "name": "US invoices over 25k", "document-type": "invoice", "amount-threshold": 25000,
-     "currency": {"code": "USD"}, "account-type": {"name": "US Operations"}, "approval-chain": {"name": "Finance Approval"}},
-    {"id": 51, "name": "APAC invoices over 10k", "document-type": "invoice", "amount-threshold": 10000,
-     "currency": {"code": "SGD"}, "account-type": {"name": "APAC Operations"}, "approval-chain": {"name": "APAC Finance Approval"}}
+    {
+      "id": 50,
+      "name": "US invoices over 25k",
+      "document-type": "invoice",
+      "amount-threshold": 25000,
+      "currency": {
+        "code": "USD"
+      },
+      "account-type": {
+        "name": "US Operations"
+      },
+      "approval-chain": {
+        "name": "Finance Approval"
+      }
+    },
+    {
+      "id": 51,
+      "name": "APAC invoices over 10k",
+      "document-type": "invoice",
+      "amount-threshold": 10000,
+      "currency": {
+        "code": "SGD"
+      },
+      "account-type": {
+        "name": "APAC Operations"
+      },
+      "approval-chain": {
+        "name": "APAC Finance Approval"
+      }
+    }
   ],
   "custom_fields": [
-    {"id": 60, "object-type": "invoice", "name": "cost-centre-owner", "data-type": "string", "required": true},
-    {"id": 61, "object-type": "requisition", "name": "project-code", "data-type": "string", "required": false},
-    {"id": 62, "object-type": "supplier", "name": "esg-rating", "data-type": "string", "required": false}
+    {
+      "id": 60,
+      "object-type": "invoice",
+      "name": "cost-centre-owner",
+      "data-type": "string",
+      "required": true
+    },
+    {
+      "id": 61,
+      "object-type": "requisition",
+      "name": "project-code",
+      "data-type": "string",
+      "required": false
+    },
+    {
+      "id": 62,
+      "object-type": "supplier",
+      "name": "esg-rating",
+      "data-type": "string",
+      "required": false
+    }
+  ],
+  "lookup_values": [],
+  "users": [
+    {
+      "id": 901,
+      "login": "controller"
+    },
+    {
+      "id": 902,
+      "login": "cfo"
+    },
+    {
+      "id": 903,
+      "login": "apac.controller"
+    }
   ]
 }

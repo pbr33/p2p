@@ -168,6 +168,134 @@ def cmd_triage(args) -> None:
             print(f"\n=== {number}: triage failed: {e}", file=sys.stderr)
 
 
+STAGE_LABEL = {"passed": "PASSED", "failed": "FAILED", "blocked": "BLOCKED", "pending": "PENDING", "planned": "PLANNED"}
+
+
+def _rollout_agent(args):
+    from p2p_agents.agents.template_rollout import TemplateRolloutAgent
+
+    answers = Path(args.answers)
+    run_dir = Path(args.run_dir) if args.run_dir else Path("rollout") / f"{Path(args.template).stem}-{answers.stem}"
+    return TemplateRolloutAgent(args.template, answers, run_dir)
+
+
+def print_stage(stage) -> None:
+    from p2p_agents.rollout.verify import summarize
+
+    c = summarize(stage.tests)
+    creates = sum(a["action"] == "create" for a in stage.actions)
+    updates = sum(a["action"] == "update" for a in stage.actions)
+    print(f"\n=== {stage.instance}: {STAGE_LABEL[stage.status]}" + (f" — {stage.note}" if stage.note else ""))
+    print(f"  changes: {creates} create, {updates} update"
+          + (" (applied)" if stage.applied else "")
+          + f" | tests: {c['pass']} pass, {c['fail']} fail, {c['pending']} pending, {c['skip']} skipped")
+    for a in [] if stage.applied else stage.actions[:40]:
+        print(f"    {a['action']:6} {a['object_type']}:{a['key']}")
+    for r in stage.results:
+        if not r.ok:
+            print(f"  FAIL {r.action} {r.object_type}:{r.key} - {r.error}")
+    for i in stage.issues:
+        print(f"  {i.severity.upper()} {i.code} {i.object_type}:{i.key} - {i.message}")
+    for t in stage.tests:
+        if t.status in ("fail", "pending"):
+            print(f"  {t.status.upper():7} {t.id} [{t.entities}] {t.description} - {t.detail}")
+    for f in stage.import_files:
+        print(f"  import file: {f}")
+
+
+def cmd_rollout_templates(args) -> None:
+    from p2p_agents.rollout.template import list_templates, load_template
+
+    for name, path in list_templates().items():
+        t = load_template(str(path))
+        print(f"{name:28} {t.platform:8} {len(t.params)} questions, {len(t.objects)} objects, "
+              f"{len(t.checks)} checks, {len(t.uat)} UAT cases — {t.description}")
+
+
+def cmd_rollout_questions(args) -> None:
+    from p2p_agents.rollout.template import answers_template, ask, load_answers, load_template, write_answers
+
+    template = load_template(args.template)
+    out = Path(args.out)
+    if args.interactive:
+        existing = load_answers(out) if out.exists() else []
+        entities = ask(template, existing)
+        write_answers(entities, template, out)
+        print(f"\n{len(entities)} entit{'y' if len(entities) == 1 else 'ies'} saved to {out}")
+        return
+    print(f"Questions for {template.name} ({template.description}):")
+    for p in template.params.values():
+        extra = [x for x in (f"e.g. {p.example}" if p.example else "",
+                             "optional" if not p.required else "",
+                             f"default {p.default}" if p.default is not None else "") if x]
+        print(f"  {p.name:24} {p.question}" + (f"  ({'; '.join(extra)})" if extra else ""))
+    answers_template(template, out)
+    print(f"\nAnswer file with an example row written to {out}; add one row per company code.")
+
+
+def _ai_error(e: Exception) -> str:
+    import anthropic
+
+    if isinstance(e, anthropic.AuthenticationError):
+        return "the Anthropic API key was rejected (check ANTHROPIC_API_KEY)"
+    if isinstance(e, anthropic.APIError):
+        return f"Claude API error: {getattr(e, 'message', e)}"
+    return str(e)
+
+
+def cmd_rollout_run(args) -> None:
+    agent = _rollout_agent(args)
+    stages = [s.strip() for arg in args.stages for s in arg.split(",") if s.strip()]
+    print(f"Template {agent.template.name}: {len(agent.rendered.entities)} entities "
+          f"({', '.join(agent.rendered.entities)}), {len(agent.rendered.items)} configuration objects")
+    previous = None
+    for name in stages:
+        stage = agent.run_stage(name, apply=args.apply, approved_by=args.approved_by, previous=previous)
+        print_stage(stage)
+        if args.apply and stage.status != "passed":
+            later = stages[stages.index(name) + 1:]
+            if later:
+                print(f"\nStopped: {', '.join(later)} not changed because {name} did not pass.")
+            break
+        previous = name
+    if args.review and args.apply:
+        last = [s for s in stages if s in agent.state.stages][-1]
+        try:
+            print(f"\nQA review: {agent.review(last)}")
+        except Exception as e:  # noqa: BLE001 - the roll-out itself is done; report and carry on
+            print(f"\nQA review skipped: {_ai_error(e)}")
+    try:
+        csv_path, md_path, n = agent.uat(ai=args.ai_uat)
+    except Exception as e:  # noqa: BLE001
+        if not args.ai_uat:
+            raise
+        print(f"\nAI UAT cases skipped: {_ai_error(e)}")
+        csv_path, md_path, n = agent.uat(ai=False)
+    print(f"\nUAT scripts ({n} cases): {csv_path}")
+    print(f"Checklist: {agent.run_dir / 'checklist.md'} (and checklist.csv)")
+    if not args.apply:
+        print("\nDry run. Re-run with --apply to configure.")
+    wanted = ("passed",) if args.apply else ("planned", "passed")
+    ok = all(s in agent.state.stages and agent.state.stages[s].status in wanted for s in stages)
+    sys.exit(0 if ok else 1)
+
+
+def cmd_rollout_verify(args) -> None:
+    agent = _rollout_agent(args)
+    stage = agent.verify_stage(args.instance)
+    print_stage(stage)
+    if args.review:
+        print(f"\nQA review: {agent.review(args.instance)}")
+    print(f"\nChecklist: {agent.run_dir / 'checklist.md'}")
+    sys.exit(0 if stage.status == "passed" else 1)
+
+
+def cmd_rollout_uat(args) -> None:
+    agent = _rollout_agent(args)
+    csv_path, md_path, n = agent.uat(ai=args.ai)
+    print(f"{n} UAT cases written to {csv_path} and {md_path}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="p2p", description="Agentic P2P orchestration and run-support")
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -217,6 +345,39 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--apply", action="store_true", help="post work notes and route in ServiceNow")
     p.set_defaults(func=cmd_triage)
 
+    p = sub.add_parser("rollout", help="standard configuration from a template for many company codes")
+    rsub = p.add_subparsers(dest="rollout_command", required=True)
+    r = rsub.add_parser("templates", help="list available templates")
+    r.set_defaults(func=cmd_rollout_templates)
+    r = rsub.add_parser("questions", help="show the questions and write an answers file to fill in")
+    r.add_argument("--template", required=True)
+    r.add_argument("--out", required=True, help="answers file to write (.csv for bulk, or .toml)")
+    r.add_argument("--interactive", action="store_true", help="ask the questions here and save the answers")
+    r.set_defaults(func=cmd_rollout_questions)
+
+    def rollout_common(r):
+        r.add_argument("--template", required=True)
+        r.add_argument("--answers", required=True, help="answers file: CSV with one row per company code, or TOML")
+        r.add_argument("--run-dir", help="folder for state, checklist, tests and UAT (default rollout/<template>-<answers>)")
+
+    r = rsub.add_parser("run", help="plan, configure and test each environment in order (e.g. DEV then QA)")
+    rollout_common(r)
+    r.add_argument("--stages", required=True, nargs="+", help="instances in promotion order, e.g. coupa-dev coupa-qa (commas work too)")
+    r.add_argument("--apply", action="store_true", help="make the changes (default: dry run)")
+    r.add_argument("--approved-by", help="required when a stage is production")
+    r.add_argument("--review", action="store_true", help="AI QA review of the last environment")
+    r.add_argument("--ai-uat", action="store_true", help="add AI-suggested UAT cases to the template's cases")
+    r.set_defaults(func=cmd_rollout_run)
+    r = rsub.add_parser("verify", help="re-test one environment without changing it")
+    rollout_common(r)
+    r.add_argument("--instance", required=True)
+    r.add_argument("--review", action="store_true")
+    r.set_defaults(func=cmd_rollout_verify)
+    r = rsub.add_parser("uat", help="write UAT test scripts")
+    rollout_common(r)
+    r.add_argument("--ai", action="store_true", help="add AI-suggested cases")
+    r.set_defaults(func=cmd_rollout_uat)
+
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(message)s")
     if args.command == "triage" and not (args.numbers or args.queue):
@@ -227,6 +388,12 @@ def main(argv: list[str] | None = None) -> None:
         if args.verbose:
             raise
         sys.exit(f"error: {e}")
+    except Exception as e:
+        import anthropic
+
+        if args.verbose or not isinstance(e, anthropic.APIError):
+            raise
+        sys.exit(f"error: {_ai_error(e)}")
 
 
 if __name__ == "__main__":

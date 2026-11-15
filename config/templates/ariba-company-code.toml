@@ -1,0 +1,125 @@
+# Standard SAP Ariba invoicing (CIG) mappings for a new S/4HANA company code.
+# Ariba has no write API for these objects: the agent writes CIG import files per
+# environment; once they are loaded and the realm re-exported, `p2p rollout verify` tests them.
+description = "Ariba invoicing CIG mappings per S/4HANA company code"
+platform = "ariba"
+label = "${company_code}"
+
+[params.company_code]
+question = "S/4HANA company code (4 characters)"
+pattern = "^[A-Z0-9]{4}$"
+example = "IN10"
+
+[params.legal_entity]
+question = "Legal entity name"
+example = "Acme India Pvt Ltd"
+
+[params.purchasing_unit]
+question = "Ariba purchasing unit for this company code"
+required = false
+default = "PU_${company_code}"
+
+[params.tax_codes]
+question = "Tax code mapping, Ariba code to S/4HANA tax code (MWSKZ)"
+type = "list"
+fields = ["code", "s4_code", "description"]
+example = "GST18:G8:GST 18%;GST5:G5:GST 5%"
+
+# ─────────────── configuration objects ───────────────
+
+[[objects]]
+type = "lookup_tables"
+data = { Name = "COMPANY_CODE_MAP", Description = "S/4HANA company code to Ariba purchasing unit" }
+
+[[objects]]
+type = "lookup_tables"
+data = { Name = "TAX_MAP", Description = "Tax code mapping" }
+
+[[objects]]
+type = "cig_parameters"
+data = { DocumentType = "InvoiceDetailRequest", ParameterName = "CompanyCodeMapping", Value = "ENABLED", LookupTable = "COMPANY_CODE_MAP" }
+
+[[objects]]
+type = "cig_parameters"
+data = { DocumentType = "InvoiceDetailRequest", ParameterName = "TaxCodeMapping", Value = "ENABLED", LookupTable = "TAX_MAP" }
+
+[[objects]]
+type = "cig_cross_references"
+data = { Table = "COMPANY_CODE_MAP", SourceValue = "${company_code}", TargetValue = "${purchasing_unit}" }
+
+[[objects]]
+type = "cig_cross_references"
+for_each = "tax_codes"
+data = { Table = "TAX_MAP", SourceValue = "${item.code}", TargetValue = "${item.s4_code}" }
+
+# ─────────────── business-rule checks ───────────────
+
+[[checks]]
+id = "CC-MAP"
+description = "Company code ${company_code} maps to purchasing unit ${purchasing_unit}"
+type = "cig_cross_references"
+key = "COMPANY_CODE_MAP|${company_code}"
+field = "TargetValue"
+value = "${purchasing_unit}"
+
+[[checks]]
+id = "TAX-MAP"
+for_each = "tax_codes"
+description = "Tax code ${item.code} maps to S/4HANA tax code ${item.s4_code}"
+type = "cig_cross_references"
+key = "TAX_MAP|${item.code}"
+field = "TargetValue"
+value = "${item.s4_code}"
+
+[[checks]]
+id = "CC-MAPPING-ON"
+description = "Company code mapping is enabled for invoices"
+type = "cig_parameters"
+key = "InvoiceDetailRequest|CompanyCodeMapping"
+field = "Value"
+value = "ENABLED"
+
+# ─────────────── UAT cases ───────────────
+
+[[uat]]
+id = "UAT-01"
+area = "Invoice integration"
+scenario = "Supplier invoice for ${company_code} reaches S/4HANA in the right company code"
+steps = [
+  "Supplier submits an invoice on Ariba Network against a PO of company code ${company_code}",
+  "Monitor the document in CIG (Integration Monitor) until delivered",
+  "In S/4HANA open the invoice (MIR4) and its document flow",
+]
+expected = "CIG maps ${company_code} ↔ ${purchasing_unit}; the invoice posts in company code ${company_code} without mapping errors"
+
+[[uat]]
+id = "UAT-02"
+for_each = "tax_codes"
+area = "Tax mapping"
+scenario = "Invoice with tax ${item.code} posts with S/4HANA tax code ${item.s4_code}"
+steps = [
+  "Supplier submits an invoice for ${company_code} with tax ${item.code} (${item.description})",
+  "Check the posted invoice in S/4HANA (MIR4 → tax tab)",
+]
+expected = "S/4HANA shows tax code ${item.s4_code} with the same tax amount as the Ariba invoice"
+priority = "Medium"
+
+[[uat]]
+id = "UAT-03"
+area = "Negative"
+scenario = "Invoice with an unmapped tax code is stopped with a clear error"
+steps = [
+  "Supplier submits an invoice for ${company_code} with a tax code that is not in TAX_MAP",
+  "Check CIG Integration Monitor",
+]
+expected = "The document fails in CIG with a mapping error and does not post in S/4HANA"
+
+# ─────────────── steps that stay manual ───────────────
+
+[[manual]]
+item = "Upload the CIG import files from the run's outbox for each environment and activate the configuration"
+owner = "Ariba / CIG admin"
+
+[[manual]]
+item = "Make sure purchasing unit ${purchasing_unit} exists in Ariba (master data from S/4HANA) before UAT"
+owner = "Ariba admin"

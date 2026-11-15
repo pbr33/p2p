@@ -22,6 +22,23 @@ if (Test-Path $envFile) {
     }
 }
 
+# .\demo\p2p.ps1 reset-demo  →  fresh mock systems, Ariba exports and roll-out folders
+if ($args.Count -gt 0 -and $args[0] -eq "reset-demo") {
+    Remove-Item -Recurse -Force "$root\demo\state", "$root\demo\outbox\ariba-dev", "$root\demo\outbox\ariba-qa", "$root\rollout" -ErrorAction SilentlyContinue
+    try { Invoke-RestMethod -Method Post http://127.0.0.1:8765/reset | Out-Null; "mock systems reset" } catch { "mock server not running (start it with: .\.venv\Scripts\python demo\mock_server.py)" }
+    "demo state cleared"
+    exit 0
+}
+
+# Ariba roll-out environments work on copies of the seed exports
+foreach ($envName in "dev", "qa") {
+    $state = "$root\demo\state\ariba\$envName"
+    if (-not (Test-Path $state)) {
+        New-Item -ItemType Directory -Force $state | Out-Null
+        Copy-Item "$root\demo\data\ariba\$envName\*" $state
+    }
+}
+
 $routingArgs = @()
 if ($args.Count -gt 0 -and $args[0] -eq "triage") { $routingArgs = @("--routing", "$root\demo\config\routing.toml") }
 & "$root\.venv\Scripts\p2p.exe" @args @routingArgs
