@@ -13,6 +13,7 @@ Standard library only; binds to 127.0.0.1 by default (no authentication — do n
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 import threading
@@ -21,10 +22,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
-from p2p_agents.agents.copilot import CopilotAgent, VerifyArgs
+from p2p_agents.agents.copilot import CopilotAgent, NoArgs, VerifyArgs
+from p2p_agents.rollout.documents import SUPPORTED
 from p2p_agents.rollout.reports import set_manual_done
 from p2p_agents.settings import CONFIG_DIR, load_instances
-from p2p_agents.workspace import RUNS_DIR, all_runs, load_run, run_summary
+from p2p_agents.workspace import RUNS_DIR, all_runs, load_run, roi, run_summary
 
 PAGE = Path(__file__).with_name("cockpit.html")
 
@@ -67,6 +69,12 @@ class Cockpit:
                 except Exception as e:  # noqa: BLE001 - shown in the chat
                     return 200, {"error": _friendly(e), "approvals": self._approvals()}
             return 200, {"reply": reply, "approvals": self._approvals()}
+        if method == "GET" and path == "/api/roi":
+            return 200, roi(self.runs_root, self.config_dir)
+        if method == "GET" and path == "/api/templates":
+            return 200, self.copilot.t_templates(NoArgs())
+        if method == "POST" and path == "/api/document":
+            return 200, self._document(body)
         if method == "GET" and path == "/api/approvals":
             return 200, self._approvals()
         if method == "POST" and len(parts) == 3 and parts[:2] == ["api", "approvals"]:
@@ -77,8 +85,43 @@ class Cockpit:
             return 200, {"ok": True}
         return 404, {"error": f"no route {method} {path}"}
 
+    def _document(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Uploaded client document → draft answers file (rollout/answers/<name>.csv) + open points."""
+        name = Path(str(body.get("filename", ""))).name
+        if not name or Path(name).suffix.lower() not in SUPPORTED:
+            raise ValueError(f"upload one of: {', '.join(SUPPORTED)}")
+        try:
+            data = base64.b64decode(str(body.get("content", "")), validate=True)
+        except ValueError:
+            raise ValueError("file content must be base64") from None
+        if not data or len(data) > 15_000_000:
+            raise ValueError("the file is empty or larger than 15 MB")
+        uploads = self.runs_root / "uploads"
+        uploads.mkdir(parents=True, exist_ok=True)
+        saved = uploads / name
+        saved.write_bytes(data)
+        stem = re.sub(r"[^A-Za-z0-9_-]+", "-", Path(name).stem).strip("-").lower() or "client"
+        answers = self.runs_root / "answers" / f"{stem}.csv"
+        with self.lock:
+            try:
+                ex = self.copilot.document_to_answers(str(body.get("template", "")), [saved], answers)
+            except Exception as e:  # noqa: BLE001 - shown on the page
+                import anthropic
+
+                if isinstance(e, anthropic.APIError):
+                    raise RuntimeError(_friendly(e)) from e
+                raise
+        return {**ex.model_dump(mode="json"), "answers_file": _rel(answers), "gaps_file": _rel(answers.with_suffix(".gaps.md"))}
+
     def _approvals(self) -> list[dict[str, str]]:
         return [{"id": p.id, "summary": p.summary} for p in self.copilot.pending.values()]
+
+
+def _rel(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(Path.cwd().resolve())).replace("\\", "/")
+    except ValueError:
+        return str(path)
 
 
 def _friendly(e: Exception) -> str:

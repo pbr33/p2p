@@ -109,18 +109,26 @@ def _ariba_env(tmp_path: Path) -> Path:
 
 
 def _load_imports(tmp_path: Path, env: str) -> None:
-    """Play the Ariba admin: append every import row to the export file."""
+    """Play the Ariba admin: merge every import row into the export file by natural key."""
+    from p2p_agents.paths import natural_key
+
+    platform = load_platform("ariba", ROOT / "config")
     for imp in (tmp_path / "outbox" / env).glob("*.import.csv"):
-        export = tmp_path / "bundles" / env / f"{imp.name.split('.')[0]}.csv"
+        name = imp.name.split(".")[0]
+        export = tmp_path / "bundles" / env / f"{name}.csv"
+        key = platform.objects[name].key
         with export.open(newline="", encoding="utf-8-sig") as f:
             reader = csv.DictReader(f)
             columns, rows = list(reader.fieldnames), list(reader)
+        by_key = {natural_key(r, key): r for r in rows}
         with imp.open(newline="", encoding="utf-8") as f:
-            rows += [{k: v for k, v in r.items() if k != "_action"} for r in csv.DictReader(f)]
+            for r in csv.DictReader(f):
+                change = {k: v for k, v in r.items() if k != "_action"}
+                by_key[natural_key(change, key)] = {**by_key.get(natural_key(change, key), {}), **change}
         with export.open("w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=columns)
             writer.writeheader()
-            writer.writerows(rows)
+            writer.writerows(by_key.values())
         imp.unlink()
 
 

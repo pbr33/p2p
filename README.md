@@ -93,6 +93,42 @@ changing it (drift, or Ariba imports loaded). The Copilot only changes a system 
 `apply_rollout`, which waits for an Approve click (or a typed `yes` in the terminal);
 production also needs a change reference. The cockpit has no login: keep it on 127.0.0.1.
 
+### From a client document to configured company codes
+
+Drop the client's Excel, CSV or PDF on the cockpit (or `p2p rollout from-document --template
+coupa-company-code --files wave2.xlsx --out wave2.csv`). Claude maps it onto the template's
+questions; every answer is validated by the template, values it cannot support stay empty,
+and `<answers>.gaps.md` lists the open points per owner plus the assumptions to confirm
+("2 lakh" read as 200000). The Copilot can then roll out only the complete company codes
+(`only`) and draft the email with the open questions.
+
+### Self-healing
+
+**Diagnose & fix** (or "why did UAT fail?") re-tests every environment live and connects a
+failed UAT case to the configuration test behind it — e.g. GST5 changed to 18% by hand in QA.
+When the fix is to put the template's values back, the Copilot asks for approval, re-applies
+only what differs, re-tests, and sends the UAT case back to the tester with a `RE-TEST` note.
+Causes outside the template (missing users, wrong answers) are explained and routed instead.
+
+### Time saved
+
+The cockpit's counter converts the agents' work into consultant-hours and money: objects
+configured, checks run, UAT scripts written, answers read from documents, defects fixed.
+Override the assumed minutes and hourly rate in `config/roi.toml` (keys: `hourly_rate`,
+`currency`, `minutes_per_object`, `minutes_per_test`, `minutes_per_uat_case`,
+`minutes_per_answer`, `minutes_per_fix`).
+
+### Demo
+
+```powershell
+.\.venv\Scripts\python demo\mock_server.py      # separate window
+.\demo\stage-wow-demo.ps1                       # wave 1 live, a manual change in QA, a failed UAT case
+.\demo\p2p.ps1 cockpit --open                   # then: 🩹 Diagnose & fix, and drop demo\documents\acme-wave2-company-codes.xlsx
+```
+
+Claude on Microsoft Foundry: set `ANTHROPIC_FOUNDRY_BASE_URL` (…/anthropic), `ANTHROPIC_FOUNDRY_API_KEY`
+and `P2P_MODEL` to the deployment name (e.g. `claude-opus-4-8`) in `demo\.env` or the environment.
+
 ## Tests
 
 ```bash

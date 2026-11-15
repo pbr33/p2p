@@ -172,6 +172,22 @@ def write_checklist(run_dir: Path, rendered: Rendered, state: RunState, descript
 UAT_RESULT_COLUMNS = ("Result (Pass/Fail)", "Tester", "Date", "Comments")
 
 
+def mark_uat_retest(run_dir: Path, ids: list[str], note: str) -> list[str]:
+    """After a fix: clear the result of these UAT cases so testers run them again, and say why."""
+    path = run_dir / "uat-scripts.csv"
+    rows = read_csv(path)
+    done = []
+    for r in rows:
+        if r.get("Test ID") in ids:
+            was = " / ".join(x for x in (r.get("Result (Pass/Fail)", ""), r.get("Comments", "")) if x)
+            r["Result (Pass/Fail)"], r["Date"] = "", ""
+            r["Comments"] = f"RE-TEST: {note}" + (f" (was: {was})" if was else "")
+            done.append(r["Test ID"])
+    if rows:
+        _write_csv(path, list(rows[0]), [list(r.values()) for r in rows])
+    return done
+
+
 def write_uat(run_dir: Path, template: str, cases: list[UatCase]) -> tuple[Path, Path]:
     csv_path = run_dir / "uat-scripts.csv"
     # Testers fill in the result columns in Excel; regenerating the scripts must not wipe them

@@ -77,11 +77,19 @@ class SubmitUatArgs(BaseModel):
 
 class TemplateRolloutAgent:
     def __init__(self, template: str | Template, answers: Path, run_dir: Path,
-                 llm: LLM | None = None, config_dir: Path = CONFIG_DIR):
+                 llm: LLM | None = None, config_dir: Path = CONFIG_DIR, only: list[str] | None = None):
+        """`only`: roll out just these entities (e.g. the complete ones of a draft from a client document)."""
         self.config_dir = config_dir
         self.template = template if isinstance(template, Template) else load_template(template, config_dir)
         self.platform = load_platform(self.template.platform, config_dir)
-        self.rendered: Rendered = render(self.template, self.platform, resolve_all(self.template, load_answers(answers)))
+        raw = load_answers(answers)
+        if only:
+            key = next(iter(self.template.params))
+            unknown = sorted(set(only) - {str(r.get(key, "")) for r in raw})
+            if unknown:
+                raise ValueError(f"{', '.join(unknown)} not in {Path(answers).name}")
+            raw = [r for r in raw if str(r.get(key, "")) in only]
+        self.rendered: Rendered = render(self.template, self.platform, resolve_all(self.template, raw))
         self.run_dir = run_dir
         self.llm = llm
         run_dir.mkdir(parents=True, exist_ok=True)
@@ -152,14 +160,18 @@ class TemplateRolloutAgent:
         return None
 
     def run_stage(self, name: str, *, apply: bool, approved_by: str | None = None,
-                  previous: str | None = None) -> StageResult:
+                  previous: str | None = None, record: bool = True) -> StageResult:
+        """`record=False` (dry runs only): plan without overwriting the environment's recorded status."""
+        stage = self._run_stage(name, apply=apply, approved_by=approved_by, previous=previous)
+        if record or apply:
+            self._save(stage)
+        return stage
+
+    def _run_stage(self, name: str, *, apply: bool, approved_by: str | None, previous: str | None) -> StageResult:
         inst = self._instance(name)
         now = datetime.now(timezone.utc)
         if apply and (why := self.gate(previous)):
-            stage = StageResult(instance=name, status="blocked", at=now, applied=False,
-                                note=f"not started: {why}")
-            self._save(stage)
-            return stage
+            return StageResult(instance=name, status="blocked", at=now, applied=False, note=f"not started: {why}")
 
         target = self._extract(inst)
         source = Snapshot(platform=self.platform.name, instance=f"template:{self.template.name}",
@@ -185,7 +197,6 @@ class TemplateRolloutAgent:
                 stage.results = apply_plan(plan, make_connector(self.platform, inst), self.run_dir / "audit", approved_by)
             except PlanBlocked as e:
                 stage.status, stage.tests, stage.note = "blocked", number(preflight), str(e)
-                self._save(stage)
                 return stage
             stage.applied = True
             stage.changed = self._changed(name, stage)
@@ -194,13 +205,18 @@ class TemplateRolloutAgent:
                 stage.note = "a change was rejected by the system; later changes were not attempted"
             else:
                 stage.tests = number(preflight + self._verify(inst))
+                if self._file_based():
+                    # An update sits in an import file until it is loaded: the old value is still there
+                    written = {(a["object_type"], a["key"]) for a in actions}
+                    for t in stage.tests:
+                        if t.category in ("configured", "rule") and t.status == "fail" and (t.object_type, t.key) in written:
+                            t.status, t.detail = "pending", f"update written to the import file, awaiting load ({t.detail})"
                 stage.status = self._status(stage.tests)
                 if self._file_based() and actions:
                     outbox = Path(inst.outbox_dir or "")
                     stage.import_files = sorted(str(p) for p in outbox.glob("*.import.*")
                                                 if p.name.split(".")[0] in {a["object_type"] for a in actions})
                     stage.note = "load the import files into the realm, re-export, then run `p2p rollout verify`"
-        self._save(stage)
         return stage
 
     def _changed(self, name: str, stage: StageResult) -> dict[str, str]:

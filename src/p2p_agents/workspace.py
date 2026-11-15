@@ -7,7 +7,10 @@ by testers in Excel) and manual.json (manual steps ticked off in the cockpit).
 
 from __future__ import annotations
 
+import json
 import os
+import tomllib
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -55,8 +58,9 @@ def uat_progress(run_dir: Path) -> dict[str, Any]:
     total = len(rows)
     passed = sum(e["pass"] for e in by_entity.values())
     fails = sum(e["fail"] for e in by_entity.values())
+    retest = [r.get("Test ID") for r in rows if not _result(r) and r.get("Comments", "").startswith("RE-TEST")]
     return {"total": total, "executed": passed + fails, "pass": passed, "fail": fails,
-            "by_entity": by_entity, "failed": failed}
+            "by_entity": by_entity, "failed": failed, "retest": retest}
 
 
 def manual_steps(run_dir: Path) -> list[dict[str, str]]:
@@ -136,6 +140,61 @@ def all_runs(root: Path = RUNS_DIR) -> list[dict[str, Any]]:
         except Exception as e:  # noqa: BLE001 - one broken folder must not hide the others
             out.append({"name": d.name, "error": str(e)})
     return out
+
+
+# ───────── time saved ─────────
+
+ROI_DEFAULTS: dict[str, Any] = {
+    "currency": "₹",
+    "hourly_rate": 2500,           # blended consultant rate
+    "minutes_per_object": 20,      # configure one object by hand: find, enter, save, document
+    "minutes_per_test": 2,         # check one setting by hand in one environment
+    "minutes_per_uat_case": 30,    # write one UAT script
+    "minutes_per_answer": 3,       # copy one answer from a client document into a sheet
+    "minutes_per_fix": 90,         # analyse a defect, fix it, re-test it
+}
+
+
+def log_activity(root: Path, kind: str, **data: Any) -> None:
+    """Work done outside the run folders' state (document reading, fixes) for the time-saved counter."""
+    root.mkdir(parents=True, exist_ok=True)
+    with (root / "activity.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"kind": kind, "at": datetime.now().isoformat(timespec="seconds"), **data}) + "\n")
+
+
+def roi(root: Path = RUNS_DIR, config_dir: Path = CONFIG_DIR) -> dict[str, Any]:
+    """Estimated manual effort the agents have taken over. Rates: config/roi.toml (optional)."""
+    rates = dict(ROI_DEFAULTS)
+    path = config_dir / "roi.toml"
+    if path.exists():
+        rates.update(tomllib.loads(path.read_text(encoding="utf-8")))
+    objects = tests = uat = entities = 0
+    for d in run_dirs(root):
+        try:
+            _, state = load_run(d.name, root)
+        except Exception:  # noqa: BLE001
+            continue
+        entities += len(state.entities)
+        for s in state.stages.values():
+            objects += len(s.changed)
+            tests += sum(t.status in ("pass", "fail") for t in s.tests)
+        uat += len(read_csv(d / "uat-scripts.csv"))
+    answers = fixes = 0
+    log = root / "activity.jsonl"
+    for line in log.read_text(encoding="utf-8").splitlines() if log.exists() else []:
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        answers += int(event.get("answers", 0)) if event.get("kind") == "document" else 0
+        fixes += event.get("kind") == "fix"
+    minutes = (objects * rates["minutes_per_object"] + tests * rates["minutes_per_test"]
+               + uat * rates["minutes_per_uat_case"] + answers * rates["minutes_per_answer"]
+               + fixes * rates["minutes_per_fix"])
+    hours = minutes / 60
+    return {"objects": objects, "tests": tests, "uat_cases": uat, "answers_read": answers, "fixes": fixes,
+            "company_codes": entities, "hours": round(hours, 1), "days": round(hours / 8, 1),
+            "money": round(hours * rates["hourly_rate"]), "currency": rates["currency"], "rates": rates}
 
 
 # ───────── answers files ─────────

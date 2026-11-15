@@ -88,6 +88,15 @@ class Handler(BaseHTTPRequestHandler):
                 user = {"id": STATE["next_id"], "login": self._body()["login"]}
                 STATE["coupa"][inst]["users"].append(user)
                 return self._send(201, user)
+            # Demo only: someone changes a setting by hand, e.g.
+            # POST /coupa-qa/demo/edit {"type": "tax_codes", "match": {"code": "GST5"}, "set": {"percentage": 18}}
+            if parts[1:] == ["demo", "edit"] and method == "POST":
+                body = self._body()
+                for obj in STATE["coupa"][inst].get(body["type"], []):
+                    if all(obj.get(k) == v for k, v in body["match"].items()):
+                        obj.update(body["set"])
+                        return self._send(200, obj)
+                return self._send(404, {"error": "no matching object"})
             if self.headers.get("Authorization") != f"Bearer demo-token-{inst}":
                 return self._send(401, {"error": "unauthorized"})
             if len(parts) >= 3 and parts[1] == "api":

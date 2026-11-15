@@ -91,7 +91,7 @@ class LLM:
             raise LLMError("output hit max_tokens; narrow the input (fewer object types) and retry")
         return self._text(response)
 
-    def run_tools(self, system: str, prompt: str, tools: list[Tool], max_turns: int = 15,
+    def run_tools(self, system: str, prompt: str | list[dict[str, Any]], tools: list[Tool], max_turns: int = 15,
                   max_tokens: int = 32000, history: list[dict[str, Any]] | None = None) -> ToolRun:
         """Tool-use loop. Pass `history` (a previous ToolRun.messages) to continue a conversation."""
         by_name = {t.name: t for t in tools}

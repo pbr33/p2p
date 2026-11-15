@@ -74,7 +74,7 @@ header .spacer { flex: 1; }
 .box h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 6px; }
 .box ul { margin: 0; padding-left: 18px; }
 .box li { margin: 3px 0; }
-.blockers li { color: var(--fail); }
+.blockers li, td.blockers, span.blockers, div.blockers { color: var(--fail); }
 .blockers li span { color: var(--text); }
 .ok { color: var(--pass); }
 details { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
@@ -116,6 +116,29 @@ th { color: var(--muted); font-weight: 600; background: var(--surface-2); positi
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 20; }
 .toast.show { opacity: 1; }
 .updated { color: var(--muted); font-size: 12px; }
+.roi { padding: 18px 20px; margin-bottom: 16px; display: grid; grid-template-columns: auto 1fr; gap: 10px 26px; align-items: center;
+  background: linear-gradient(120deg, var(--accent-soft), var(--surface) 70%); }
+.roi .big { font-size: 40px; font-weight: 750; letter-spacing: -.02em; line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
+.roi .big small { font-size: 15px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+.roi .money { font-size: 15px; font-weight: 650; margin-top: 6px; }
+.roi .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 22px; }
+.roi .stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.roi .stat span { color: var(--muted); font-size: 12px; }
+@media (max-width: 700px) { .roi { grid-template-columns: 1fr; } .roi .big { font-size: 32px; } }
+.doc { padding: 18px; margin-bottom: 16px; }
+.doc h2 { font-size: 15px; margin: 0 0 4px; }
+.doc .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.doc select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.drop { flex: 1; min-width: 220px; border: 2px dashed var(--border); border-radius: 10px; padding: 14px; text-align: center; color: var(--muted); cursor: pointer; transition: .15s; }
+.drop.over, .drop:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.drop b { color: var(--text); }
+.docres { margin-top: 14px; }
+.docres .sum { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.pill { font-size: 12.5px; font-weight: 600; padding: 3px 10px; border-radius: 99px; }
+.pill.ok { background: var(--pass-soft); color: var(--pass); } .pill.bad { background: var(--fail-soft); color: var(--fail); } .pill.info { background: var(--accent-soft); color: var(--accent); }
+.retest { color: var(--wait); font-size: 12.5px; margin-top: 6px; }
+.spin { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: sp .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+@keyframes sp { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -130,7 +153,20 @@ th { color: var(--muted); font-weight: 600; background: var(--surface-2); positi
 </header>
 
 <div class="layout">
-  <main id="runs"><div class="card empty">Loading…</div></main>
+  <main>
+    <section class="card roi" id="roi" aria-label="Time saved"></section>
+    <section class="card doc" aria-label="Start from a client document">
+      <h2>📄 Start a wave from a client document</h2>
+      <div class="updated">Drop the client's Excel, CSV or PDF (company codes, tax matrix, approvers). The Copilot fills in the answers file and lists what's missing — it never invents values.</div>
+      <div class="row">
+        <select id="doctemplate" aria-label="Template"></select>
+        <label class="drop" id="drop"><input type="file" id="docfile" accept=".xlsx,.xlsm,.csv,.pdf,.txt,.md" hidden>
+          <span id="droptext"><b>Drop a file here</b> or click to choose</span></label>
+      </div>
+      <div class="docres" id="docres"></div>
+    </section>
+    <div id="runs"><div class="card empty">Loading…</div></div>
+  </main>
 
   <aside class="card chat" aria-label="P2P Copilot">
     <div class="chat-head"><span class="dot"></span><b>P2P Copilot</b><button class="btn small" id="newchat">New chat</button></div>
@@ -208,11 +244,13 @@ function runCard(r) {
   const manual = r.manual.length ? r.manual.map(m => `<label><input type="checkbox" data-manual="${esc(r.name)}|${esc(m.id)}" ${m.done ? "checked" : ""}>
       <span><b>${esc(m.id)}</b> ${esc(m.entity)} — ${esc(m.step)}${m.done ? `<div class="done">${esc(m.done)}</div>` : ""}</span></label>`).join("")
     : `<div class="updated">No manual steps.</div>`;
+  const fixable = rd.blockers.some(b => !/ is pending/.test(b));
   return `<section class="card run" data-run="${esc(r.name)}">
     <div class="run-head">
       ${ring(rd.score)}
       <div class="run-title"><h2>${esc(r.name)}</h2>
-        <div class="chips"><span class="chip">${esc(r.template)}</span><span class="chip">${esc(r.platform)}</span>${r.entities.map(e => `<span class="chip ent">${esc(e)}</span>`).join("")}</div></div>
+        <div class="chips"><span class="chip">${esc(r.template)}</span><span class="chip">${esc(r.platform)}</span>${r.entities.map(e => `<span class="chip ent">${esc(e)}</span>`).join("")}</div>
+        ${fixable ? `<button class="btn small primary" style="margin-top:8px" data-ask="Diagnose the failures in roll-out ${esc(r.name)}, explain the root cause, and fix what can be fixed.">🩹 Diagnose &amp; fix</button>` : ""}</div>
       <div class="bars">${bar("Config", rd.config)}${bar("UAT", rd.uat)}${bar("Manual", rd.manual)}</div>
     </div>
     <div class="pipeline">${pipeline || '<div class="updated">No environment run yet.</div>'}</div>
@@ -220,6 +258,7 @@ function runCard(r) {
       <div class="box"><h3>Blocking go-live</h3>${blockers}</div>
       <div class="box"><h3>Next steps</h3><ul>${rd.next.map(n => `<li>${esc(n)}</li>`).join("")}</ul></div>
       <div class="box"><h3>UAT progress · ${u.executed}/${u.total} executed · ${u.pass} pass · ${u.fail} fail</h3>${uatRows}
+        ${u.retest && u.retest.length ? `<div class="retest">🔁 Fixed and sent back for re-test: ${u.retest.map(esc).join(", ")}</div>` : ""}
         <div class="updated" style="margin-top:6px">Testers fill in “Result (Pass/Fail)” in uat-scripts.csv — results appear here.</div></div>
       <div class="box manual"><h3>Manual steps</h3>${manual}</div>
     </div>
@@ -238,7 +277,88 @@ async function loadDetail(name, el) {
   } catch (e) { el.textContent = e.message; }
 }
 
+// ───── time saved ─────
+const fmt = n => Number(n).toLocaleString("en-IN");
+function money(r) {
+  if (r.currency === "₹" && r.money >= 1e7) return `₹${(r.money / 1e7).toFixed(2)} crore`;
+  if (r.currency === "₹" && r.money >= 1e5) return `₹${(r.money / 1e5).toFixed(1)} lakh`;
+  return `${r.currency}${fmt(r.money)}`;
+}
+let shownHours = 0;
+function countUp(el, to) {
+  const from = shownHours, start = performance.now(), dur = 900;
+  shownHours = to;
+  const step = t => { const k = Math.min(1, (t - start) / dur), v = from + (to - from) * (1 - Math.pow(1 - k, 3));
+    el.textContent = v.toFixed(1); if (k < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+async function loadRoi() {
+  try {
+    const r = await api("/api/roi");
+    const el = $("#roi");
+    if (!el.dataset.ready) {
+      el.innerHTML = `<div><div class="big"><span id="hours">0.0</span> <small>consultant-hours saved</small></div><div class="money" id="money"></div></div><div class="stats" id="stats"></div>`;
+      el.dataset.ready = "1";
+    }
+    countUp($("#hours"), r.hours);
+    $("#money").textContent = `≈ ${money(r)} · ${r.days} person-days`;
+    const stat = (n, label) => `<div class="stat"><b>${fmt(n)}</b><span>${label}</span></div>`;
+    $("#stats").innerHTML = stat(r.company_codes, "company codes") + stat(r.objects, "objects configured") + stat(r.tests, "checks run")
+      + stat(r.uat_cases, "UAT scripts written") + stat(r.answers_read, "answers read from documents") + stat(r.fixes, "defects fixed");
+    $("#stats").title = `Assumed manual effort: ${r.rates.minutes_per_object} min per object, ${r.rates.minutes_per_test} min per check, ${r.rates.minutes_per_uat_case} min per UAT script, ${r.rates.minutes_per_answer} min per answer, ${r.rates.minutes_per_fix} min per fix, ${r.currency}${fmt(r.rates.hourly_rate)}/hour (change in config/roi.toml)`;
+  } catch {}
+}
+
+// ───── client document ─────
+async function loadTemplates() {
+  try {
+    const ts = await api("/api/templates");
+    ts.sort((a, b) => (a.platform === "coupa" ? -1 : 0) - (b.platform === "coupa" ? -1 : 0));
+    $("#doctemplate").innerHTML = ts.map(t => `<option value="${esc(t.name)}">${esc(t.name)} (${esc(t.platform)})</option>`).join("");
+  } catch {}
+}
+function readFile(file) {
+  return new Promise((ok, bad) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(",")[1] || ""); fr.onerror = bad; fr.readAsDataURL(file); });
+}
+async function uploadDoc(file) {
+  if (!file) return;
+  const res = $("#docres"), template = $("#doctemplate").value;
+  $("#droptext").innerHTML = `<span class="spin"></span>Reading <b>${esc(file.name)}</b> with the Copilot… (about a minute)`;
+  res.innerHTML = "";
+  try {
+    const r = await api("/api/document", {template, filename: file.name, content: await readFile(file)});
+    const ok = r.status.filter(s => s.ok).length;
+    const rows = r.entities.map((e, i) => {
+      const s = r.status[i];
+      return `<tr><td>${s.ok ? "✅" : "❌"}</td>${Object.values(e).map(v => `<td>${esc(v) || '<span class="blockers">—</span>'}</td>`).join("")}<td class="blockers">${esc(s.problems.join("; "))}</td></tr>`;
+    }).join("");
+    const head = r.entities.length ? Object.keys(r.entities[0]).map(k => `<th>${esc(k)}</th>`).join("") : "";
+    const gaps = r.gaps.map(g => `<tr><td><b>${esc(g.entity)}</b></td><td>${esc(g.question)}</td><td>${esc(g.issue)}</td><td>${esc(g.source)}</td><td>${esc(g.owner)}</td></tr>`).join("");
+    res.innerHTML = `<div class="sum"><span class="pill info">${r.entities.length} company codes found</span><span class="pill ok">${ok} ready</span>
+        ${r.entities.length - ok ? `<span class="pill bad">${r.entities.length - ok} need answers</span>` : ""}<span class="pill info">${r.gaps.length} open points</span></div>
+      <div class="tablewrap"><table><tr><th></th>${head}<th>Problems</th></tr>${rows}</table></div>
+      ${gaps ? `<h3 style="margin:12px 0 0">Questions for the client</h3><div class="tablewrap"><table><tr><th>Entity</th><th>About</th><th>Issue</th><th>Where</th><th>Ask</th></tr>${gaps}</table></div>` : ""}
+      ${r.assumptions.length ? `<h3 style="margin:12px 0 4px">Assumptions to confirm</h3><ul>${r.assumptions.map(a => `<li>${esc(a)}</li>`).join("")}</ul>` : ""}
+      <div class="row"><span class="updated">Saved: <code>${esc(r.answers_file)}</code> · open points: <code>${esc(r.gaps_file)}</code></span></div>
+      <div class="row"><button class="btn primary" data-ask="Plan the roll-out of template ${esc(template)} with answers file ${esc(r.answers_file)} to the DEV and QA environments for this platform. Roll out only the company codes that are ready; tell me what blocks the others.">Plan the roll-out with the Copilot →</button>
+      <button class="btn" data-ask="Write a short, polite email to the client asking the open questions in ${esc(r.gaps_file)}, grouped by who should answer.">Draft the email to the client</button></div>`;
+    loadRoi();
+  } catch (e) { res.innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+  $("#droptext").innerHTML = `<b>Drop another file</b> or click to choose`;
+}
+$("#docfile").addEventListener("change", e => uploadDoc(e.target.files[0]));
+const drop = $("#drop");
+drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); uploadDoc(e.dataTransfer.files[0]); });
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-ask]");
+  if (b) send(b.dataset.ask);
+});
+
 async function refresh() {
+  loadRoi();
   try {
     const runs = await api("/api/runs");
     $("#runs").innerHTML = runs.length ? runs.map(runCard).join("")
@@ -335,8 +455,11 @@ $("#msgs").addEventListener("click", async e => {
     const r = await api(`/api/approvals/${id}`, {approve});
     if (r.status === "rejected") { box.innerHTML = `<b>Rejected</b>${esc(r.summary)} — nothing was changed.`; }
     else {
-      const st = (r.result.stages || []).map(s => `${s.environment}: <b>${LABEL[s.status] || s.status}</b> (${s.tests.pass} pass, ${s.tests.fail} fail)`).join(" → ");
-      box.innerHTML = `<b>Done</b>${esc(r.summary)}<div style="margin-top:6px">${st}</div>${r.result.stopped ? `<div class="blockers" style="margin-top:4px">${esc(r.result.stopped)}</div>` : ""}`;
+      const stages = r.result.stages || (r.result.environment ? [r.result] : []);
+      const st = stages.map(s => `${esc(s.environment)}: <b>${LABEL[s.status] || esc(s.status)}</b> (${s.tests.pass} pass, ${s.tests.fail} fail)`).join(" → ");
+      const retest = (r.result.uat_sent_for_retest || []).length ? `<div class="retest">🔁 Sent back to testers for re-test: ${r.result.uat_sent_for_retest.map(esc).join(", ")}</div>` : "";
+      box.innerHTML = `<b>Done</b>${esc(r.summary)}<div style="margin-top:6px">${st}</div>${retest}${r.result.stopped ? `<div class="blockers" style="margin-top:4px">${esc(r.result.stopped)}</div>` : ""}`;
+      send("The approved change has run. Summarise the result in two lines and give the next step.");
       refresh();
     }
   } catch (err) { box.innerHTML = `<b>Could not run</b>${esc(err.message)}`; }
@@ -371,6 +494,7 @@ $("#newchat").addEventListener("click", async () => {
 $("#refresh").addEventListener("click", refresh);
 
 refresh();
+loadTemplates();
 api("/api/approvals").then(showApprovals).catch(() => {});
 setInterval(() => { if (document.visibilityState === "visible") refresh(); }, 15000);
 </script>

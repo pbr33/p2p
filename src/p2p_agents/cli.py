@@ -290,6 +290,20 @@ def cmd_rollout_verify(args) -> None:
     sys.exit(0 if stage.status == "passed" else 1)
 
 
+def cmd_rollout_from_document(args) -> None:
+    from p2p_agents.agents.copilot import CopilotAgent
+
+    files = [Path(f) for f in args.files]
+    ex = CopilotAgent().document_to_answers(args.template, files, Path(args.out))
+    for s in ex.status:
+        print(f"  {'OK  ' if s['ok'] else 'OPEN'} {s['label']:8} {'; '.join(s['problems'])}")
+    for g in ex.gaps:
+        print(f"  ? {g.entity}: {g.question} - {g.issue}" + (f" (ask: {g.owner})" if g.owner else ""))
+    for a in ex.assumptions:
+        print(f"  assumed: {a}")
+    print(f"\n{len(ex.entities)} entities -> {ex.answers_file}\nopen points -> {ex.gaps_file}")
+
+
 def cmd_rollout_uat(args) -> None:
     agent = _rollout_agent(args)
     csv_path, md_path, n = agent.uat(ai=args.ai)
@@ -427,6 +441,11 @@ def main(argv: list[str] | None = None) -> None:
     rollout_common(r)
     r.add_argument("--ai", action="store_true", help="add AI-suggested cases")
     r.set_defaults(func=cmd_rollout_uat)
+    r = rsub.add_parser("from-document", help="draft an answers file from client documents (Excel, CSV, PDF)")
+    r.add_argument("--template", required=True)
+    r.add_argument("--files", required=True, nargs="+")
+    r.add_argument("--out", required=True, help="answers file to write (.csv or .toml); open points go next to it")
+    r.set_defaults(func=cmd_rollout_from_document)
 
     p = sub.add_parser("ask", help="ask the P2P Copilot one question (English or Hindi)")
     p.add_argument("question", nargs="+")
