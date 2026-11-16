@@ -24,6 +24,15 @@ if ($Stop) {
     exit 0
 }
 
+# 0. Windows path-length limit: the Python packages contain paths ~155 characters deep
+$longPaths = (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -ErrorAction SilentlyContinue).LongPathsEnabled -eq 1
+if (-not $longPaths -and $root.Length -gt 95) {
+    Write-Host "This folder's path is too long for Windows ($($root.Length) characters):" -ForegroundColor Red
+    Write-Host "  $root"
+    Write-Host "Move the folder somewhere shorter, e.g. C:\P2P or your Downloads folder, and start it again."
+    exit 1
+}
+
 # 1. Python 3.11+
 Step "Checking Python"
 $python = $null
