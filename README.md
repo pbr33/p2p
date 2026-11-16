@@ -12,6 +12,18 @@ Agentic orchestration and run-support for a multi-platform Procure-to-Pay landsc
 
 The design and requirements traceability are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Showcase on any Windows laptop
+
+1. Copy the folder (or unzip `P2P-Showcase.zip`, or `git clone -b feature/template-rollout https://github.com/pbr33/p2p.git`)
+   to a short path such as `C:\P2P` or your Downloads folder.
+2. Double-click **`START-SHOWCASE.cmd`**. The first run installs everything (about 2 minutes) and asks
+   once for the Claude key (Azure AI Foundry); later runs start in seconds.
+3. The Go-Live Cockpit opens at http://127.0.0.1:8770 with the demo story ready.
+
+`START-SHOWCASE.cmd reset` restores the demo story; `START-SHOWCASE.cmd stop` stops the mock
+systems. Needs Python 3.11+ (the launcher offers to install it with winget) and internet access
+to Claude. The key is kept in `demo\.env` on that laptop only.
+
 ## Setup
 
 ```bash
